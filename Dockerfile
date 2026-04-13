@@ -5,6 +5,9 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
+# Install native build tools for better-sqlite3 (even if not needed for frontend build, npm ci installs it)
+RUN apk add --no-cache python3 make g++
+
 # Copy package files first for layer caching
 COPY package*.json ./
 RUN npm ci
