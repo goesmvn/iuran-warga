@@ -1,0 +1,12 @@
+kasjepun.arcomteknologi.id {
+    # Reverse proxy ke aplikasi yang berjalan di port 3088
+    reverse_proxy localhost:3088
+
+    # Optimasi: Kompresi response
+    encode gzip
+
+    # Log aktivitas (opsional)
+    log {
+        output file /var/log/caddy/kasjepun_access.log
+    }
+}
