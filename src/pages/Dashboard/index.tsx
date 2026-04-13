@@ -21,7 +21,7 @@ export default function Dashboard() {
   const currentYear = new Date().getFullYear();
 
   // --- Summary Metrics (memoized for performance) ---
-  const { currentBalance, totalIn, totalOut } = useMemo(() => {
+  const { currentBalance } = useMemo(() => {
     const totalIn = transactions
       .filter((t) => t.type === "Pemasukan")
       .reduce((sum, t) => sum + t.nominal, 0);
