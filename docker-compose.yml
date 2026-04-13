@@ -1,18 +1,78 @@
+# =============================================================
+# docker-compose.yml — Optimized for Komodo Deployment
+# https://komo.do
+#
+# CARA PAKAI DI KOMODO:
+# 1. Buat Stack baru di Komodo
+# 2. Paste isi file ini ke editor Stack
+# 3. Set environment variable berikut di tab "Environment":
+#    - JWT_SECRET   → string acak 32+ karakter (WAJIB)
+#    - ALLOWED_ORIGIN → domain publik Anda (jika pakai reverse proxy)
+# =============================================================
+
 version: '3.8'
 
 services:
   app:
+    # Opsi A: Build dari source code (jika Komodo terhubung ke Git repo)
     build:
       context: .
       dockerfile: Dockerfile
+
+    # Opsi B: Gunakan image dari Docker Hub / registry (uncomment jika push image duluan)
+    # image: goesmvn/iuran-warga:latest
+
     container_name: jepunkas-app
     restart: unless-stopped
+
     ports:
-      - "3000:3000"
+      - "3088:3088"
+
     volumes:
-      # Mount data folder agar database sqlite tidak hilang ketika container di-restart/build ulang
-      - ./data:/app/data
+      # Volume persisten untuk database SQLite
+      # Data tidak akan hilang saat container di-restart atau update
+      - jepunkas_data:/app/data
+
     environment:
-      - PORT=3000
-      # Optional: pastikan timezone sesuai dengan region agar tanggal di SQLite sesuai
+      - PORT=3088
       - TZ=Asia/Jakarta
+      # [WAJIB] Diisi via Komodo Environment Variables UI
+      # Jangan hardcode di sini!
+      - JWT_SECRET=${JWT_SECRET}
+      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
+
+    # Resource limits (sesuaikan dengan spesifikasi VPS Anda)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          memory: 128M
+
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:3088/api/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    # Hanya expose ke jaringan internal
+    # Gunakan Nginx/Traefik sebagai reverse proxy di depannya
+    networks:
+      - jepunkas_net
+
+# =============================================================
+# VOLUMES
+# Named volume dikelola Docker — tidak hilang saat rebuild
+# =============================================================
+volumes:
+  jepunkas_data:
+    driver: local
+
+# =============================================================
+# NETWORKS
+# =============================================================
+networks:
+  jepunkas_net:
+    driver: bridge

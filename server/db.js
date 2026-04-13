@@ -14,7 +14,7 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const dbPath = path.join(dataDir, 'jepunkas.sqlite');
-const db = new Database(dbPath, { verbose: console.log });
+const db = new Database(dbPath);
 
 // Performance tuning for SQLite (WAL mode is drastically faster and safer for concurrent access)
 db.pragma('journal_mode = WAL');
@@ -60,6 +60,7 @@ const initDB = () => {
       type TEXT NOT NULL,
       defaultNominal INTEGER,
       periode TEXT,
+      showInPayment INTEGER DEFAULT 1,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -124,5 +125,13 @@ const initDB = () => {
 };
 
 initDB();
+
+// === MIGRATIONS (safe to run on every startup) ===
+// Adds columns that may not exist in databases created before this update
+try {
+  db.exec(`ALTER TABLE categories ADD COLUMN showInPayment INTEGER DEFAULT 1`);
+} catch (_) {
+  // Column already exists — silently ignore
+}
 
 export default db;

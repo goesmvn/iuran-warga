@@ -20,66 +20,83 @@ export default function Dashboard() {
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
 
-  // Metrics Logic
-  const totalIn = transactions
-    .filter((t) => t.type === "Pemasukan")
-    .reduce((sum, t) => sum + t.nominal, 0);
-  const totalOut = transactions
-    .filter((t) => t.type === "Pengeluaran")
-    .reduce((sum, t) => sum + t.nominal, 0);
-  const currentBalance = totalIn - totalOut;
+  // --- Summary Metrics (memoized for performance) ---
+  const { currentBalance, totalIn, totalOut } = useMemo(() => {
+    const totalIn = transactions
+      .filter((t) => t.type === "Pemasukan")
+      .reduce((sum, t) => sum + t.nominal, 0);
+    const totalOut = transactions
+      .filter((t) => t.type === "Pengeluaran")
+      .reduce((sum, t) => sum + t.nominal, 0);
+    return { totalIn, totalOut, currentBalance: totalIn - totalOut };
+  }, [transactions]);
 
   const locationBalances = useMemo(() => {
     return locations.map(loc => {
-        const in_ = transactions.filter(t => t.type === 'Pemasukan' && (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID))).reduce((sum, t) => sum + t.nominal, 0);
-        const out_ = transactions.filter(t => t.type === 'Pengeluaran' && (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID))).reduce((sum, t) => sum + t.nominal, 0);
-        return { ...loc, balance: in_ - out_ };
+      const locIn = transactions
+        .filter(t => t.type === 'Pemasukan' && (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID)))
+        .reduce((sum, t) => sum + t.nominal, 0);
+      const locOut = transactions
+        .filter(t => t.type === 'Pengeluaran' && (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID)))
+        .reduce((sum, t) => sum + t.nominal, 0);
+      return { ...loc, balance: locIn - locOut };
     });
   }, [locations, transactions]);
 
-  const thisMonthIn = transactions
-    .filter(
-      (t) =>
-        t.type === "Pemasukan" &&
-        new Date(t.date).getMonth() + 1 === currentMonth &&
-        new Date(t.date).getFullYear() === currentYear,
-    )
-    .reduce((sum, t) => sum + t.nominal, 0);
-  const thisMonthOut = transactions
-    .filter(
-      (t) =>
-        t.type === "Pengeluaran" &&
-        new Date(t.date).getMonth() + 1 === currentMonth &&
-        new Date(t.date).getFullYear() === currentYear,
-    )
-    .reduce((sum, t) => sum + t.nominal, 0);
+  const { thisMonthIn, thisMonthOut } = useMemo(() => {
+    const thisMonthIn = transactions
+      .filter(
+        (t) =>
+          t.type === "Pemasukan" &&
+          t.categoryId !== "cat-saldo-awal" &&
+          new Date(t.date).getMonth() + 1 === currentMonth &&
+          new Date(t.date).getFullYear() === currentYear,
+      )
+      .reduce((sum, t) => sum + t.nominal, 0);
+    const thisMonthOut = transactions
+      .filter(
+        (t) =>
+          t.type === "Pengeluaran" &&
+          new Date(t.date).getMonth() + 1 === currentMonth &&
+          new Date(t.date).getFullYear() === currentYear,
+      )
+      .reduce((sum, t) => sum + t.nominal, 0);
+    return { thisMonthIn, thisMonthOut };
+  }, [transactions, currentMonth, currentYear]);
 
   const monthlyData = useMemo(() => {
-    const data = [];
-    for (let i = 1; i <= 12; i++) {
-        const inThisMonth = transactions.filter(t => t.type === "Pemasukan" && new Date(t.date).getMonth() + 1 === i && new Date(t.date).getFullYear() === currentYear).reduce((sum, t) => sum + t.nominal, 0);
-        const outThisMonth = transactions.filter(t => t.type === "Pengeluaran" && new Date(t.date).getMonth() + 1 === i && new Date(t.date).getFullYear() === currentYear).reduce((sum, t) => sum + t.nominal, 0);
-        data.push({ month: i, in: inThisMonth, out: outThisMonth });
-    }
-    return data;
+    return Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      const inThisMonth = transactions
+        .filter(t => t.type === "Pemasukan" && t.categoryId !== "cat-saldo-awal" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
+        .reduce((sum, t) => sum + t.nominal, 0);
+      const outThisMonth = transactions
+        .filter(t => t.type === "Pengeluaran" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
+        .reduce((sum, t) => sum + t.nominal, 0);
+      return { month, in: inThisMonth, out: outThisMonth };
+    });
   }, [transactions, currentYear]);
 
   const maxAmount = Math.max(...monthlyData.flatMap(d => [d.in, d.out]), 1);
 
-  // Arrears (Tunggakan) Logic - Simple check who hasn't paid *this* month for any Iuran.
-  const paidThisMonthIds = new Set(
-    transactions
-      .filter(
-        (t) =>
-          t.type === "Pemasukan" &&
-          t.periodeBulan === currentMonth &&
-          t.periodeTahun === currentYear,
-      )
-      .map((t) => t.residentId),
-  );
-  const arrearsCount = warga.filter(
-    (w) => w.status === "Aktif" && !paidThisMonthIds.has(w.id),
-  ).length;
+  // Tunggakan: Warga aktif yang belum bayar bulan ini
+  const { paidThisMonthIds, arrearsCount } = useMemo(() => {
+    const paidThisMonthIds = new Set(
+      transactions
+        .filter(
+          (t) =>
+            t.type === "Pemasukan" &&
+            t.categoryId !== "cat-saldo-awal" &&
+            t.periodeBulan === currentMonth &&
+            t.periodeTahun === currentYear,
+        )
+        .map((t) => t.residentId),
+    );
+    const arrearsCount = warga.filter(
+      (w) => w.status === "Aktif" && !paidThisMonthIds.has(w.id),
+    ).length;
+    return { paidThisMonthIds, arrearsCount };
+  }, [transactions, warga, currentMonth, currentYear]);
 
   return (
     <div className="animate-in fade-in duration-500 space-y-6">
@@ -222,8 +239,8 @@ export default function Dashboard() {
                 {/* Tooltip */}
                 <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity flex flex-col items-center z-20 whitespace-nowrap">
                   <span className="font-bold mb-1">{new Date(2000, d.month - 1).toLocaleString("id-ID", { month: "short" })}</span>
-                  <span className="text-green-300">+{(d.in/1000).toFixed(0)}k</span>
-                  <span className="text-red-300">-{(d.out/1000).toFixed(0)}k</span>
+                  <span className="text-green-300">+Rp {d.in.toLocaleString('id-ID')}</span>
+                  <span className="text-red-300">-Rp {d.out.toLocaleString('id-ID')}</span>
                 </div>
                 
                 {/* X-axis label */}

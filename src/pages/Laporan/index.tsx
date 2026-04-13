@@ -39,16 +39,33 @@ export default function Laporan() {
     );
   }, [transactions, filterMonth, filterYear]);
 
+  const getSaldoAwalBulan = (month: number, year: number) => {
+    const beforeDate = new Date(year, month - 1, 1);
+    const earlierTxs = transactions.filter(t => new Date(t.date) < beforeDate);
+    const earlierIn = earlierTxs.filter(t => t.type === 'Pemasukan').reduce((a, b) => a + b.nominal, 0);
+    const earlierOut = earlierTxs.filter(t => t.type === 'Pengeluaran').reduce((a, b) => a + b.nominal, 0);
+    
+    const saldoAwalInMonth = transactions
+        .filter(t => t.categoryId === 'cat-saldo-awal' && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === year)
+        .reduce((a, b) => a + b.nominal, 0);
+
+    return (earlierIn - earlierOut) + saldoAwalInMonth;
+  };
+
+  const saldoAwalBulanan = getSaldoAwalBulan(filterMonth, filterYear);
+
   const monthlyIn = monthlyTransactions
-    .filter((t) => t.type === "Pemasukan")
+    .filter((t) => t.type === "Pemasukan" && t.categoryId !== "cat-saldo-awal")
     .reduce((sum, t) => sum + t.nominal, 0);
   const monthlyOut = monthlyTransactions
     .filter((t) => t.type === "Pengeluaran")
     .reduce((sum, t) => sum + t.nominal, 0);
 
+  const saldoAkhirBulanan = saldoAwalBulanan + monthlyIn - monthlyOut;
+
   const categoryBreakdown = useMemo(() => {
     const breakdown: Record<string, number> = {};
-    monthlyTransactions.forEach((t) => {
+    monthlyTransactions.filter(t => t.categoryId !== 'cat-saldo-awal').forEach((t) => {
       breakdown[t.categoryId] = (breakdown[t.categoryId] || 0) + t.nominal;
     });
     return Object.entries(breakdown)
@@ -402,10 +419,21 @@ export default function Laporan() {
 
       {activeTab === "Bulanan" && (
         <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl shadow-sm">
+                <p className="text-blue-800 text-sm font-medium mb-1">Saldo Kas Awal Bulan</p>
+                <h4 className="text-2xl font-bold text-blue-900">Rp {saldoAwalBulanan.toLocaleString("id-ID")}</h4>
+             </div>
+             <div className="bg-brand-600 outline outline-4 outline-brand-600/20 text-white p-6 rounded-2xl shadow-sm">
+                <p className="text-brand-100 text-sm font-medium mb-1">Saldo Kas Akhir Bulan</p>
+                <h4 className="text-2xl font-bold">Rp {saldoAkhirBulanan.toLocaleString("id-ID")}</h4>
+             </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <p className="text-gray-500 text-sm font-medium mb-1">
-                Total Pemasukan
+                Penerimaan Bulan Ini
               </p>
               <h4 className="text-2xl font-bold text-green-600">
                 Rp {monthlyIn.toLocaleString("id-ID")}
@@ -416,7 +444,7 @@ export default function Laporan() {
             </div>
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <p className="text-gray-500 text-sm font-medium mb-1">
-                Total Pengeluaran
+                Pengeluaran Bulan Ini
               </p>
               <h4 className="text-2xl font-bold text-red-600">
                 Rp {monthlyOut.toLocaleString("id-ID")}
@@ -433,15 +461,15 @@ export default function Laporan() {
               </div>
             </div>
             <div
-              className={`p-6 rounded-2xl border shadow-sm ${monthlyIn >= monthlyOut ? "bg-brand-50 border-brand-100" : "bg-orange-50 border-orange-100"}`}
+              className={`p-6 rounded-2xl border shadow-sm ${monthlyIn >= monthlyOut ? "bg-green-50 border-green-100" : "bg-orange-50 border-orange-100"}`}
             >
               <p
-                className={`text-sm font-medium mb-1 ${monthlyIn >= monthlyOut ? "text-brand-800" : "text-orange-800"}`}
+                className={`text-sm font-medium mb-1 ${monthlyIn >= monthlyOut ? "text-green-800" : "text-orange-800"}`}
               >
-                Surplus / Defisit
+                Surplus / Defisit Bersih
               </p>
               <h4
-                className={`text-2xl font-bold ${monthlyIn >= monthlyOut ? "text-brand-700" : "text-orange-700"}`}
+                className={`text-2xl font-bold ${monthlyIn >= monthlyOut ? "text-green-700" : "text-orange-700"}`}
               >
                 {monthlyIn >= monthlyOut ? "+" : "-"} Rp{" "}
                 {Math.abs(monthlyIn - monthlyOut).toLocaleString("id-ID")}

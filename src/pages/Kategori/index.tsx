@@ -181,7 +181,11 @@ export default function DaftarIuran() {
                     <Edit2 className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => deleteCategory(cat.id)}
+                    onClick={() => {
+                        if(window.confirm('Yakin menghapus Iuran/Kategori ini? Seluruh transaksi terkait mungkin akan gagal dirender dengan benar.')) {
+                            deleteCategory(cat.id);
+                        }
+                    }}
                     className="p-1 text-gray-400 hover:text-red-500 rounded focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Hapus Iuran"
                   >

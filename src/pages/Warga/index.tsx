@@ -206,8 +206,13 @@ export default function Warga() {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => deleteWarga(w.id)}
+                      onClick={() => {
+                        if(window.confirm('Yakin ingin menghapus warga ini? (Data transaksi yang terikat mungkin akan kehilangan referensi)')) {
+                          deleteWarga(w.id);
+                        }
+                      }}
                       className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Hapus Warga"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

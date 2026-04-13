@@ -1,38 +1,54 @@
-# Stage 1: Build Frontend React App
+# =============================================================
+# STAGE 1: Build Frontend (React + Vite)
+# =============================================================
 FROM node:20-alpine AS frontend-builder
+
 WORKDIR /app
 
-# Copy dependency files
+# Copy package files first for layer caching
 COPY package*.json ./
+RUN npm ci --include=dev
 
-# Install all dependencies (including devDependencies for Vite)
-RUN npm install
-
-# Copy source code and build
+# Copy source and build
 COPY . .
 RUN npm run build
 
-# Stage 2: Production Server
-FROM node:20-alpine
+# =============================================================
+# STAGE 2: Production Server
+# =============================================================
+FROM node:20-alpine AS production
+
+# Security: run as non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 WORKDIR /app
 
-# Install native build tools required for better-sqlite3
-RUN apk add --no-cache python3 make g++ 
+# Install native build tools for better-sqlite3, then clean up
+RUN apk add --no-cache python3 make g++ && \
+    npm install -g npm@latest --quiet
 
-# Install only production dependencies
+# Copy package files and install ONLY production dependencies
 COPY package*.json ./
-RUN npm install --production
+RUN npm ci --omit=dev && \
+    apk del python3 make g++ && \
+    npm cache clean --force
 
-# Copy built frontend assets
+# Copy built frontend
 COPY --from=frontend-builder /app/dist ./dist
 
-# Copy backend server files
+# Copy backend
 COPY server/ ./server/
 
-# Create a persistent volume directory for SQLite
-RUN mkdir -p data
+# Create persistent data dir and set ownership
+RUN mkdir -p /app/data && chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
+# Health check — Komodo will use this to monitor container health
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/ping || exit 1
 
 EXPOSE 3000
 
-# Start Express server which serves both API and static UI
-CMD ["npm", "run", "server"]
+CMD ["node", "server/index.js"]
