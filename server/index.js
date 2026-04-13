@@ -28,15 +28,20 @@ const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'fallback_secret_for_local_dev_only_C
 // [SEC-02] STRICT CORS - Only allow same origin in production
 // =====================================================================
 const allowedOrigins = process.env.ALLOWED_ORIGIN
-  ? [process.env.ALLOWED_ORIGIN]
-  : ['http://localhost:5173', 'http://localhost:3000'];
+  ? [process.env.ALLOWED_ORIGIN.replace(/\/$/, '')] // Strip trailing slash if present
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3088'];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman in dev)
+    // 1. Allow requests with no origin (e.g. server-to-server or initial load)
     if (!origin) return callback(null, true);
+
+    // 2. Allow if origin matches whitelist
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS policy: origin ${origin} is not allowed.`));
+
+    // 3. For any other origin, we don't throw an error (which would cause a 500),
+    // we simply inform CORS it's not allowed (returns 403 or blocks in browser)
+    callback(null, false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -436,8 +441,12 @@ app.get('/api/ping', (req, res) => res.send('pong'));
 // =====================================================================
 const distPath = path.join(__dirname, '..', 'dist');
 app.use(express.static(distPath, {
-  setHeaders: (res) => {
+  setHeaders: (res, filePath) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Ensure correct MIME types for ESM modules
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
   }
 }));
 app.get('*', (req, res) => {

@@ -50,8 +50,8 @@ USER appuser
 
 # Health check — Komodo will use this to monitor container health
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3000/api/ping || exit 1
+  CMD wget -qO- http://localhost:3088/api/ping || exit 1
 
-EXPOSE 3000
+EXPOSE 3088
 
 CMD ["node", "server/index.js"]
