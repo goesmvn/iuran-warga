@@ -45,21 +45,10 @@ const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'fallback_secret_for_local_dev_only_C
 app.use(cors());
 
 // =====================================================================
-// [SEC-03] HELMET WITH PROPER CSP (No longer disabled)
+// [SEC-03] HELMET — Security headers (CSP disabled, handled by Caddy)
 // =====================================================================
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "https://cloudflareinsights.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com"],
-      objectSrc: ["'none'"],
-      frameAncestors: ["'none'"], // Prevent clickjacking
-    },
-  },
+  contentSecurityPolicy: false, // Caddy reverse proxy handles CSP
   crossOriginEmbedderPolicy: false,
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
