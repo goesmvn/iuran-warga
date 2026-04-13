@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jepunkas-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount data folder agar database sqlite tidak hilang ketika container di-restart/build ulang
+      - ./data:/app/data
+    environment:
+      - PORT=3000
+      # Optional: pastikan timezone sesuai dengan region agar tanggal di SQLite sesuai
+      - TZ=Asia/Jakarta

@@ -1,0 +1,17 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="jepun-center" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f43f5e" />
+      <stop offset="40%" stop-color="#facc15" /> 
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.2" />
+    </radialGradient>
+  </defs>
+  <g transform="translate(50,50)">
+    <path transform="rotate(0)" d="M0,0 C-25,-15 -35,-42 0,-48 C20,-40 10,-15 0,0" fill="#ffffff" stroke="#fef08a" stroke-width="1.5" />
+    <path transform="rotate(72)" d="M0,0 C-25,-15 -35,-42 0,-48 C20,-40 10,-15 0,0" fill="#ffffff" stroke="#fef08a" stroke-width="1.5" />
+    <path transform="rotate(144)" d="M0,0 C-25,-15 -35,-42 0,-48 C20,-40 10,-15 0,0" fill="#ffffff" stroke="#fef08a" stroke-width="1.5" />
+    <path transform="rotate(216)" d="M0,0 C-25,-15 -35,-42 0,-48 C20,-40 10,-15 0,0" fill="#ffffff" stroke="#fef08a" stroke-width="1.5" />
+    <path transform="rotate(288)" d="M0,0 C-25,-15 -35,-42 0,-48 C20,-40 10,-15 0,0" fill="#ffffff" stroke="#fef08a" stroke-width="1.5" />
+  </g>
+  <circle cx="50" cy="50" r="22" fill="url(#jepun-center)" />
+</svg>

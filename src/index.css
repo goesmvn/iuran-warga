@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --color-orange-50: var(--color-rose-50);
+  --color-orange-100: var(--color-rose-100);
+  --color-orange-200: var(--color-rose-200);
+  --color-orange-300: var(--color-rose-300);
+  --color-orange-400: var(--color-rose-400);
+  --color-orange-500: var(--color-rose-500);
+  --color-orange-600: var(--color-rose-600);
+  --color-orange-700: var(--color-rose-700);
+  --color-orange-800: var(--color-rose-800);
+  --color-orange-900: var(--color-rose-900);
+  --color-orange-950: var(--color-rose-950);
+  
+  --color-gray-50: var(--color-stone-50);
+  --color-gray-100: var(--color-stone-100);
+  --color-gray-200: var(--color-stone-200);
+  --color-gray-300: var(--color-stone-300);
+  --color-gray-400: var(--color-stone-400);
+  --color-gray-500: var(--color-stone-500);
+  --color-gray-600: var(--color-stone-600);
+  --color-gray-700: var(--color-stone-700);
+  --color-gray-800: var(--color-stone-800);
+  --color-gray-900: var(--color-stone-900);
+  --color-gray-950: var(--color-stone-950);
+
+  --color-brand-50: #fff1f2;
+  --color-brand-100: #ffe4e6;
+  --color-brand-200: #fecdd3;
+  --color-brand-300: #fda4af;
+  --color-brand-400: #fb7185;
+  --color-brand-500: #f43f5e;
+  /* Soft Tridatu Rose-red */
+  --color-brand-600: #e11d48;
+  --color-brand-700: #be123c;
+  --color-brand-800: #9f1239;
+  --color-brand-900: #881337;
+  --color-brand-950: #4c0519;
+}
+
+@layer utilities {
+  .font-display {
+    font-family: inherit;
+    letter-spacing: -0.02em;
+  }
+  
+  /* Print Optimization */
+  @media print {
+    body {
+      background-color: white !important;
+    }
+    aside, header, nav, .print\:hidden, button {
+      display: none !important;
+    }
+    main {
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+    /* Ensure colors print properly */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    @page {
+      size: A4 portrait;
+      margin: 1.5cm;
+    }
+  }
+}
+
+@layer base {
+  body {
+    @apply antialiased text-gray-900 bg-gray-50;
+    /* Soft pattern background hint */
+    background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 20.5V18H0v-2h20v-2H0v-2h20v-2H0V8h20V6H0V4h20V2H0V0h22v20h2v-2h2v2h2v-2h2v2h2v-2h2v2h2v-2h2v2h2v2h-2v2h2v2h-2v2h2v2h-2v2h2v2h-2v2h2v2h-2v2h2v2h-2v2h2v2h-2v2h-2v-2h-2v2h-2v-2h-2v2h-2v-2h-2v2h-2v-2h-2v2h-2v-2h-2v2H20v-1.5z' fill='%236b7280' fill-opacity='0.02' fill-rule='evenodd'/%3E%3C/svg%3E");
+  }
+}
