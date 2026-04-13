@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy package files first for layer caching
 COPY package*.json ./
-RUN npm ci --include=dev
+RUN npm ci
 
 # Copy source and build
 COPY . .

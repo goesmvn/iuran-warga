@@ -10,8 +10,6 @@
 #    - ALLOWED_ORIGIN → domain publik Anda (jika pakai reverse proxy)
 # =============================================================
 
-version: '3.8'
-
 services:
   app:
     # Opsi A: Build dari source code (jika Komodo terhubung ke Git repo)
