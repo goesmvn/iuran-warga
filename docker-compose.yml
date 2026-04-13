@@ -37,7 +37,7 @@ services:
       # [WAJIB] Diisi via Komodo Environment Variables UI
       # Jangan hardcode di sini!
       - JWT_SECRET=${JWT_SECRET}
-      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
+      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3088}
 
     # Resource limits (sesuaikan dengan spesifikasi VPS Anda)
     deploy:
