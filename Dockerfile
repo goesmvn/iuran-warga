@@ -10,7 +10,7 @@ RUN apk add --no-cache python3 make g++
 
 # Copy package files first for layer caching
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy source and build
 COPY . .
@@ -32,7 +32,7 @@ RUN apk add --no-cache python3 make g++ && \
 
 # Copy package files and install ONLY production dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev && \
+RUN npm install --omit=dev && \
     apk del python3 make g++ && \
     npm cache clean --force
 
