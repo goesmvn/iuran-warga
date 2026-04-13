@@ -17,6 +17,20 @@ const port = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // =====================================================================
+// STATIC FRONTEND — Served BEFORE any security middleware
+// so that JS/CSS/HTML assets are never blocked by CORS or CSP.
+// =====================================================================
+const distPath = path.join(__dirname, '..', 'dist');
+app.use(express.static(distPath, {
+  setHeaders: (res, filePath) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
+  }
+}));
+
+// =====================================================================
 // [SEC-01] ENSURE JWT_SECRET IS SET IN PRODUCTION
 // =====================================================================
 if (!JWT_SECRET) {
@@ -55,11 +69,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"], // needed for React bundle
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      connectSrc: ["'self'", "https://cloudflareinsights.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://fonts.googleapis.com"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"], // Prevent clickjacking
     },
@@ -436,19 +450,7 @@ app.post('/api/restore', requireAdmin, express.raw({ type: '*/*', limit: '50mb' 
 // Ping endpoint
 app.get('/api/ping', (req, res) => res.send('pong'));
 
-// =====================================================================
-// STATIC FRONTEND (Docker Production)
-// =====================================================================
-const distPath = path.join(__dirname, '..', 'dist');
-app.use(express.static(distPath, {
-  setHeaders: (res, filePath) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    // Ensure correct MIME types for ESM modules
-    if (filePath.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    }
-  }
-}));
+// SPA fallback — any non-API route serves index.html (must be after all API routes)
 app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
