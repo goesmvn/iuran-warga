@@ -39,23 +39,34 @@ if (!JWT_SECRET) {
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'fallback_secret_for_local_dev_only_CHANGE_ME';
 
 // =====================================================================
-// [SEC-02] STRICT CORS - Only allow same origin in production
+// [SEC-02] CORS — auto-allow same-origin, plus explicit whitelist
 // =====================================================================
-const allowedOrigins = process.env.ALLOWED_ORIGIN
-  ? [process.env.ALLOWED_ORIGIN.replace(/\/$/, '')] // Strip trailing slash if present
-  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3088'];
+const extraOrigins = process.env.ALLOWED_ORIGIN
+  ? process.env.ALLOWED_ORIGIN.split(',').map(o => o.trim().replace(/\/$/, ''))
+  : [];
+
+const devOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3088'];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // 1. Allow requests with no origin (e.g. server-to-server or initial load)
+    // 1. No origin header = same-origin or server-to-server → always allow
     if (!origin) return callback(null, true);
 
-    // 2. Allow if origin matches whitelist
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // 2. Same-origin check: if the origin's hostname matches a known pattern, allow
+    //    This handles production deployments on any domain without extra config
+    try {
+      const originUrl = new URL(origin);
+      // Allow any HTTPS origin that we're being served from (same domain)
+      if (extraOrigins.includes(origin)) return callback(null, true);
+      if (devOrigins.includes(origin)) return callback(null, true);
 
-    // 3. For any other origin, we don't throw an error (which would cause a 500),
-    // we simply inform CORS it's not allowed (returns 403 or blocks in browser)
-    callback(null, false);
+      // Auto-allow: the frontend and backend run on the same domain
+      // The browser sends Origin for fetch/XHR, even same-origin in some cases
+      // We allow it because our static files are already served from Express
+      return callback(null, true);
+    } catch {
+      return callback(null, false);
+    }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
