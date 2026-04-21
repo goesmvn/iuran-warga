@@ -82,7 +82,7 @@ export default function Dashboard() {
   const maxAmount = Math.max(...monthlyData.flatMap(d => [d.in, d.out]), 1);
 
   // Tunggakan: Warga aktif yang belum bayar bulan ini
-  const { paidThisMonthIds, arrearsCount } = useMemo(() => {
+  const { arrearsCount } = useMemo(() => {
     const paidThisMonthIds = new Set(
       transactions
         .filter(
