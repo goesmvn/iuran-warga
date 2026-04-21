@@ -871,12 +871,18 @@ export default function Laporan() {
                     </td>
                     <td className="px-6 py-4 text-right print:hidden">
                       {(() => {
-                        const templateSetting = settings['wa_template_tunggakan'] || `Om Swastyastu / Halo Bapak/Ibu {{nama}} (Blok {{blok}}),\n\nKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *{{bulan}} bulan* di tahun berjalan.\n\nMohon konfirmasinya jika sudah melakukan pembayaran agar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.\n\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏`;
+                        const templateSetting = settings['wa_template_tunggakan'] || `Om Swastyastu / Halo Bapak/Ibu {{nama}} (Blok {{blok}}),\n\nKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *{{bulan}} bulan* di tahun berjalan.\nTotal tunggakan: *Rp {{nominal}}*\n\nMohon konfirmasinya jika sudah melakukan pembayaran ke rekening:\n{{rekening}}\n\nagar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.\n\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏`;
                         
+                        const nominalBulanan = parseInt(settings['nominal_iuran_bulanan'] || '50000');
+                        const totalNominal = (w.missedMonthsCount * nominalBulanan).toLocaleString('id-ID');
+                        const rekeningTujuan = settings['rekening_tujuan'] || '-';
+
                         const parsedMessage = templateSetting
                             .replace(/\{\{nama\}\}/g, w.namaKepalaKeluarga)
                             .replace(/\{\{blok\}\}/g, w.nomorRumah)
-                            .replace(/\{\{bulan\}\}/g, String(w.missedMonthsCount));
+                            .replace(/\{\{bulan\}\}/g, String(w.missedMonthsCount))
+                            .replace(/\{\{nominal\}\}/g, totalNominal)
+                            .replace(/\{\{rekening\}\}/g, rekeningTujuan);
                             
                         const message = encodeURIComponent(parsedMessage);
 

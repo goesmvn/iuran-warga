@@ -26,7 +26,9 @@ export default function Pengelola() {
   const namaDesa = settings['nama_desa'] || '';
   const alamat = settings['alamat'] || '';
   const mapsUrl = settings['maps_url'] || '';
-  const waTemplateTunggakan = settings['wa_template_tunggakan'] || 'Om Swastyastu / Halo Bapak/Ibu {{nama}} (Blok {{blok}}),\n\nKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *{{bulan}} bulan* di tahun berjalan.\n\nMohon konfirmasinya jika sudah melakukan pembayaran agar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.\n\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏';
+  const waTemplateTunggakan = settings['wa_template_tunggakan'] || 'Om Swastyastu / Halo Bapak/Ibu {{nama}} (Blok {{blok}}),\n\nKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *{{bulan}} bulan* di tahun berjalan.\nTotal tunggakan: *Rp {{nominal}}*\n\nMohon konfirmasinya jika sudah melakukan pembayaran ke rekening:\n{{rekening}}\n\nagar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.\n\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏';
+  const nominalIuranBulanan = settings['nominal_iuran_bulanan'] || '50000';
+  const rekeningTujuan = settings['rekening_tujuan'] || '';
   
   const [isUpdatingSetting, setIsUpdatingSetting] = useState(false);
   const [localStartYear, setLocalStartYear] = useState('');
@@ -37,6 +39,8 @@ export default function Pengelola() {
   const [localAlamat, setLocalAlamat] = useState('');
   const [localMapsUrl, setLocalMapsUrl] = useState('');
   const [localWaTemplate, setLocalWaTemplate] = useState('');
+  const [localNominalIuran, setLocalNominalIuran] = useState('');
+  const [localRekeningTujuan, setLocalRekeningTujuan] = useState('');
 
   const [isRestoring, setIsRestoring] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,8 +120,10 @@ export default function Pengelola() {
        setLocalAlamat(alamat);
        setLocalMapsUrl(mapsUrl);
        setLocalWaTemplate(waTemplateTunggakan);
+       setLocalNominalIuran(nominalIuranBulanan);
+       setLocalRekeningTujuan(rekeningTujuan);
     }
-  }, [startYear, namaKetua, namaBendahara, namaOrganisasi, namaDesa, alamat, mapsUrl, waTemplateTunggakan, settingsLoading]);
+  }, [startYear, namaKetua, namaBendahara, namaOrganisasi, namaDesa, alamat, mapsUrl, waTemplateTunggakan, nominalIuranBulanan, rekeningTujuan, settingsLoading]);
 
   const handleUpdateSettings = async () => {
     setIsUpdatingSetting(true);
@@ -130,6 +136,8 @@ export default function Pengelola() {
     if (localAlamat !== alamat) { await updateSetting('alamat', localAlamat); changed = true; }
     if (localMapsUrl !== mapsUrl) { await updateSetting('maps_url', localMapsUrl); changed = true; }
     if (localWaTemplate !== waTemplateTunggakan) { await updateSetting('wa_template_tunggakan', localWaTemplate); changed = true; }
+    if (localNominalIuran !== nominalIuranBulanan) { await updateSetting('nominal_iuran_bulanan', localNominalIuran); changed = true; }
+    if (localRekeningTujuan !== rekeningTujuan) { await updateSetting('rekening_tujuan', localRekeningTujuan); changed = true; }
     
     setIsUpdatingSetting(false);
     if (changed) alert("Pengaturan berhasil disimpan.");
@@ -303,13 +311,44 @@ export default function Pengelola() {
               </div>
             </div>
 
+            {/* Tagihan & Nominal Section */}
+            <div className="border-t border-gray-100 mt-6 pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Landmark className="w-5 h-5 text-gray-400" />
+                <h3 className="font-bold text-gray-800">Informasi Pembayaran & Tagihan</h3>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">Atur nominal tagihan wajib per bulan dan nomor rekening untuk disematkan dalam pesan otomatis WhatsApp.</p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 flex flex-col gap-2">
+                  <label className="text-sm font-bold text-gray-700">Nominal Iuran Bulanan (Rp)</label>
+                  <input 
+                    type="number" 
+                    value={localNominalIuran}
+                    onChange={(e) => setLocalNominalIuran(e.target.value)}
+                    placeholder="Contoh: 50000"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="flex-[2] flex flex-col gap-2">
+                  <label className="text-sm font-bold text-gray-700">Rekening Tujuan / Instruksi Transfer</label>
+                  <input 
+                    type="text" 
+                    value={localRekeningTujuan}
+                    onChange={(e) => setLocalRekeningTujuan(e.target.value)}
+                    placeholder="Cth: BCA 12345678 a/n Pengurus RT"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* WhatsApp Template Section */}
             <div className="border-t border-gray-100 mt-6 pt-6">
               <div className="flex items-center gap-2 mb-4">
                 <h3 className="font-bold text-gray-800">Template Pesan WhatsApp Tunggakan</h3>
               </div>
               <p className="text-xs text-gray-500 mb-4">
-                Sesuaikan kata-kata untuk pesan tagihan otomatis. Gunakan variabel <code>{'{{nama}}'}</code>, <code>{'{{blok}}'}</code>, dan <code>{'{{bulan}}'}</code>.
+                Sesuaikan kata-kata untuk pesan tagihan otomatis. Variabel tersedia: <code>{'{{nama}}'}</code>, <code>{'{{blok}}'}</code>, <code>{'{{bulan}}'}</code>, <code>{'{{nominal}}'}</code>, dan <code>{'{{rekening}}'}</code>.
               </p>
               <textarea 
                 value={localWaTemplate}
