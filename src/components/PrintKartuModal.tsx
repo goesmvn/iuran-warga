@@ -132,8 +132,16 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
                      <JepunIcon className="w-full h-full" />
                   </div>
                   <div>
-                     <h1 className={`${isThermal ? 'text-lg' : 'text-2xl'} font-black uppercase tracking-widest text-gray-900`}>{settings['rt_name'] || 'RT 00 / RW 00'}</h1>
-                     <p className={`${isThermal ? 'text-xs' : 'text-base font-medium'} text-gray-600`}>Buku Kontrol Kas & Iuran Warga</p>
+                     <h1 className={`${isThermal ? 'text-lg' : 'text-2xl'} font-black uppercase tracking-widest text-gray-900`}>{settings['nama_organisasi'] || settings['rt_name'] || 'Organisasi Warga'}</h1>
+                     {settings['nama_desa'] && (
+                       <p className={`${isThermal ? 'text-[10px]' : 'text-xs'} font-medium text-gray-600`}>{settings['nama_desa']}</p>
+                     )}
+                     {settings['alamat'] && !isThermal && (
+                       <p className="text-[11px] text-gray-500 mt-0.5 leading-snug max-w-xs">{settings['alamat']}</p>
+                     )}
+                     {!settings['nama_organisasi'] && !settings['nama_desa'] && (
+                       <p className={`${isThermal ? 'text-xs' : 'text-base font-medium'} text-gray-600`}>Buku Kontrol Kas & Iuran Warga</p>
+                     )}
                   </div>
                </div>
                {!isThermal && (

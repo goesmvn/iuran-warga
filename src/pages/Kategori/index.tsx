@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useCategory } from "../../hooks/useCategory";
-import { Plus, Edit2, X } from "lucide-react";
+import { useTransaksi } from "../../hooks/useTransaksi";
+import { Plus, Edit2, X, Trash2, CheckCircle2 } from "lucide-react";
 import type { Category } from "../../types";
 
 export default function DaftarIuran() {
   const { categories, deleteCategory, updateCategory } = useCategory();
+  const { transactions } = useTransaksi();
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -126,137 +128,108 @@ export default function DaftarIuran() {
         </Link>
       </div>
 
-      {/* Grid Cards Container */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {categories.map((cat) => (
-          <div
-            key={cat.id}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden relative group flex flex-col justify-between h-[280px]"
-          >
-            <div className="p-5">
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 relative">
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-br ${cat.type === "Pemasukan" ? "from-orange-400 to-orange-600" : "from-gray-400 to-gray-500"} opacity-80`}
-                    ></div>
-                    {/* Abstract geometric decoration inside the icon space */}
-                    <div className="absolute inset-0 bg-endek-pattern opacity-20 transform scale-150"></div>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1 text-[10px] font-bold tracking-widest uppercase">
-                      <span
-                        className={
-                          cat.periode === "Tahunan"
-                            ? "text-purple-600"
-                            : cat.periode === "Insidental"
-                            ? "text-rose-600"
-                            : "text-blue-600"
-                        }
-                      >
-                        {cat.periode || "Bulanan"}
-                      </span>
-                      {cat.type === "Pemasukan" && (
-                        <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">
-                          Pemasukan
+      {/* List / Table Container */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-[#e2e8f0] text-gray-800">
+              <tr>
+                <th className="px-4 py-3 border border-gray-300 text-left font-bold uppercase tracking-wider text-xs">Informasi Iuran</th>
+                <th className="px-4 py-3 border border-gray-300 text-left font-bold uppercase tracking-wider text-xs">Arus Dana & Periode</th>
+                <th className="px-4 py-3 border border-gray-300 text-right font-bold uppercase tracking-wider text-xs">Nominal Default</th>
+                <th className="px-4 py-3 border border-gray-300 text-center font-bold uppercase tracking-wider text-xs w-32">Status Tampil</th>
+                <th className="px-4 py-3 border border-gray-300 text-center font-bold uppercase tracking-wider text-xs w-32">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((cat, idx) => {
+                const isUsed = transactions.some(t => t.categoryId === cat.id);
+                return (
+                  <tr key={cat.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-gray-50 transition-colors`}>
+                    <td className="px-4 py-3 border border-gray-200">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 relative mt-0.5">
+                          <div className={`absolute inset-0 bg-gradient-to-br ${cat.type === "Pemasukan" ? "from-orange-400 to-orange-600" : "from-gray-400 to-gray-500"} opacity-70`}></div>
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900 leading-tight">{cat.name}</p>
+                          <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">{cat.description || `Digunakan untuk pencatatan ${cat.type.toLowerCase()} warga.`}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 border border-gray-200">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {cat.type === "Pemasukan" ? (
+                          <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase">Pemasukan</span>
+                        ) : (
+                          <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase">Pengeluaran</span>
+                        )}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${cat.periode === "Tahunan" ? 'text-purple-700 bg-purple-50 border border-purple-100' : cat.periode === "Insidental" ? 'text-rose-700 bg-rose-50 border border-rose-100' : 'text-blue-700 bg-blue-50 border border-blue-100'}`}>
+                          {cat.periode || "Bulanan"}
                         </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 border border-gray-200 text-right">
+                      {cat.defaultNominal ? (
+                        <span className="font-bold text-gray-900 tracking-tight">Rp {cat.defaultNominal.toLocaleString('id-ID')}</span>
+                      ) : (
+                        <span className="text-gray-400 font-medium text-xs">Bebas/Sukarela</span>
                       )}
-                      {cat.type === "Pengeluaran" && (
-                        <span className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">
-                          Pengeluaran
-                        </span>
+                    </td>
+                    <td className="px-4 py-3 border border-gray-200 text-center">
+                      {cat.showInPayment !== false ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-brand-50 text-brand-700 border border-brand-200 px-2.5 py-1 rounded-full inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/>Tampil</span>
+                      ) : (
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200 px-2.5 py-1 rounded-full inline-flex items-center gap-1"><X className="w-3 h-3"/>Sembunyi</span>
                       )}
-                    </div>
-                    <h3 className="font-bold text-gray-900 leading-tight">
-                      {cat.name}
-                    </h3>
-                  </div>
-                </div>
-                <div className="relative flex gap-2">
-                  <button
-                    onClick={() => setEditingCategory(cat)}
-                    className="p-1 text-gray-400 hover:text-brand-500 rounded focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Edit Iuran"
-                  >
-                    <Edit2 className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                        if(window.confirm('Yakin menghapus Iuran/Kategori ini? Seluruh transaksi terkait mungkin akan gagal dirender dengan benar.')) {
-                            deleteCategory(cat.id);
-                        }
-                    }}
-                    className="p-1 text-gray-400 hover:text-red-500 rounded focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Hapus Iuran"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.5}
-                      stroke="currentColor"
-                      className="w-5 h-5"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <p className="text-sm text-gray-500 line-clamp-2 mt-2">
-                {cat.description ||
-                  `Digunakan untuk pencatatan ${cat.type.toLowerCase()} warga.`}
-              </p>
-            </div>
-
-            <div className="px-5 pb-5">
-              <div className="flex items-end justify-between border-t border-gray-100 pt-4">
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">
-                    Nominal Iuran
-                  </p>
-                  <p className="font-bold tracking-tight text-gray-900">
-                    {cat.defaultNominal ? (
-                      `Rp${cat.defaultNominal.toLocaleString("id-ID")}`
-                    ) : (
-                      <span className="text-gray-400 font-medium text-sm">
-                        Nominal Bebas
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">
-                    Dibuat Sejak
-                  </p>
-                  <p className="text-xs font-semibold text-gray-800">
-                    {cat.id.startsWith("cat-")
-                      ? "Sistem Default"
-                      : "Baru Ditambahkan"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Action Bar */}
-            <div className="border-t border-gray-50 bg-gray-50/50 p-3 flex justify-end items-center text-xs px-5">
-              <button onClick={() => setEditingCategory(cat)} className="text-orange-600 font-semibold hover:text-orange-700 flex items-center gap-1">
-                Edit Kategori{" "}
-                <Edit2 className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {categories.length === 0 && (
-          <div className="col-span-full py-12 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
-            <p>Belum ada Iuran atau Kategori yang dibuat.</p>
-          </div>
-        )}
+                    </td>
+                    <td className="px-4 py-3 border border-gray-200">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setEditingCategory(cat)}
+                          className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          title="Edit Iuran"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        
+                        {isUsed ? (
+                          <button
+                            type="button"
+                            className="p-1.5 text-gray-300 cursor-not-allowed"
+                            title="Tidak bisa dihapus karena sudah dipakai"
+                            onClick={() => alert("Kategori ini tidak dapat dihapus karena sudah digunakan dalam " + transactions.filter(t => t.categoryId === cat.id).length + " pencatatan transaksi.")}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if(window.confirm('Yakin menghapus kategori iuran ini secara permanen?')) {
+                                deleteCategory(cat.id);
+                              }
+                            }}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Hapus Iuran"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {categories.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-gray-400">
+                    Belum ada Iuran atau Kategori yang dibuat.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Edit Modal */}

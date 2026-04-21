@@ -78,8 +78,13 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
               <div className="w-12 h-12 mx-auto mb-3 grayscale print:grayscale-0 opacity-80">
                  <JepunIcon className="w-full h-full" />
               </div>
-              <h2 className="font-bold text-base print:text-sm uppercase tracking-widest">{settings['rt_name'] || 'RT 00 / RW 00'}</h2>
-              <p className="text-gray-600 text-xs">JepunKas Sist. Iuran Terpadu</p>
+              <h2 className="font-bold text-base print:text-sm uppercase tracking-widest">{settings['nama_organisasi'] || settings['rt_name'] || 'Organisasi Warga'}</h2>
+              {settings['nama_desa'] && (
+                <p className="text-gray-500 text-[11px] mt-0.5">{settings['nama_desa']}</p>
+              )}
+              {settings['alamat'] && (
+                <p className="text-gray-500 text-[10px] mt-1 leading-snug">{settings['alamat']}</p>
+              )}
               <div className="border-t border-dashed border-gray-400 my-4"></div>
             </div>
 
