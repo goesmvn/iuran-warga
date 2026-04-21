@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useUsers } from '../../hooks/useUsers';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
-import { Shield, Trash2, Plus, X, Settings, Download, Upload, Database, MapPin, Users, CalendarDays } from 'lucide-react';
+import { Shield, Trash2, Plus, X, Settings, Download, Upload, Database, MapPin, Users, CalendarDays, Landmark } from 'lucide-react';
 import { apiFetch } from '../../utils/apiFetch';
 
 type SettingsTab = 'pengguna' | 'pengaturan' | 'identitas' | 'backup';
