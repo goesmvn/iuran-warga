@@ -26,6 +26,7 @@ export default function Pengelola() {
   const namaDesa = settings['nama_desa'] || '';
   const alamat = settings['alamat'] || '';
   const mapsUrl = settings['maps_url'] || '';
+  const waTemplateTunggakan = settings['wa_template_tunggakan'] || 'Om Swastyastu / Halo Bapak/Ibu {{nama}} (Blok {{blok}}),\n\nKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *{{bulan}} bulan* di tahun berjalan.\n\nMohon konfirmasinya jika sudah melakukan pembayaran agar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.\n\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏';
   
   const [isUpdatingSetting, setIsUpdatingSetting] = useState(false);
   const [localStartYear, setLocalStartYear] = useState('');
@@ -35,6 +36,7 @@ export default function Pengelola() {
   const [localNamaDesa, setLocalNamaDesa] = useState('');
   const [localAlamat, setLocalAlamat] = useState('');
   const [localMapsUrl, setLocalMapsUrl] = useState('');
+  const [localWaTemplate, setLocalWaTemplate] = useState('');
 
   const [isRestoring, setIsRestoring] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,8 +115,9 @@ export default function Pengelola() {
        setLocalNamaDesa(namaDesa);
        setLocalAlamat(alamat);
        setLocalMapsUrl(mapsUrl);
+       setLocalWaTemplate(waTemplateTunggakan);
     }
-  }, [startYear, namaKetua, namaBendahara, namaOrganisasi, namaDesa, alamat, mapsUrl, settingsLoading]);
+  }, [startYear, namaKetua, namaBendahara, namaOrganisasi, namaDesa, alamat, mapsUrl, waTemplateTunggakan, settingsLoading]);
 
   const handleUpdateSettings = async () => {
     setIsUpdatingSetting(true);
@@ -126,6 +129,7 @@ export default function Pengelola() {
     if (localNamaDesa !== namaDesa) { await updateSetting('nama_desa', localNamaDesa); changed = true; }
     if (localAlamat !== alamat) { await updateSetting('alamat', localAlamat); changed = true; }
     if (localMapsUrl !== mapsUrl) { await updateSetting('maps_url', localMapsUrl); changed = true; }
+    if (localWaTemplate !== waTemplateTunggakan) { await updateSetting('wa_template_tunggakan', localWaTemplate); changed = true; }
     
     setIsUpdatingSetting(false);
     if (changed) alert("Pengaturan berhasil disimpan.");
@@ -297,6 +301,22 @@ export default function Pengelola() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* WhatsApp Template Section */}
+            <div className="border-t border-gray-100 mt-6 pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <h3 className="font-bold text-gray-800">Template Pesan WhatsApp Tunggakan</h3>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                Sesuaikan kata-kata untuk pesan tagihan otomatis. Gunakan variabel <code>{'{{nama}}'}</code>, <code>{'{{blok}}'}</code>, dan <code>{'{{bulan}}'}</code>.
+              </p>
+              <textarea 
+                value={localWaTemplate}
+                onChange={(e) => setLocalWaTemplate(e.target.value)}
+                className={`${inputClass} min-h-[150px] leading-relaxed resize-y`}
+                placeholder="Ketik template pesan WhatsApp di sini..."
+              />
             </div>
 
             <div className="border-t border-gray-100 mt-6 pt-6 flex justify-end">

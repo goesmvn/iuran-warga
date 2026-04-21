@@ -871,7 +871,15 @@ export default function Laporan() {
                     </td>
                     <td className="px-6 py-4 text-right print:hidden">
                       {(() => {
-                        const message = `Om Swastyastu / Halo Bapak/Ibu ${w.namaKepalaKeluarga} (Blok ${w.nomorRumah}),%0A%0AKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *${w.missedMonthsCount} bulan* di tahun berjalan.%0A%0AMohon konfirmasinya jika sudah melakukan pembayaran agar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.%0A%0ATerima kasih banyak atas partisipasi dan dukungannya. 🙏`;
+                        const templateSetting = settings['wa_template_tunggakan'] || `Om Swastyastu / Halo Bapak/Ibu {{nama}} (Blok {{blok}}),\n\nKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *{{bulan}} bulan* di tahun berjalan.\n\nMohon konfirmasinya jika sudah melakukan pembayaran agar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.\n\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏`;
+                        
+                        const parsedMessage = templateSetting
+                            .replace(/\{\{nama\}\}/g, w.namaKepalaKeluarga)
+                            .replace(/\{\{blok\}\}/g, w.nomorRumah)
+                            .replace(/\{\{bulan\}\}/g, String(w.missedMonthsCount));
+                            
+                        const message = encodeURIComponent(parsedMessage);
+
                         const waLink = w.noHp 
                           ? `https://wa.me/${w.noHp.replace(/^0/, "62")}?text=${message}` 
                           : `https://wa.me/?text=${message}`;
