@@ -870,19 +870,24 @@ export default function Laporan() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right print:hidden">
-                      <a
-                        href={`https://wa.me/${w.noHp?.replace(/^0/, "62")}?text=Halo%20Bapak/Ibu%20Terkait%20Iuran%20Warga...`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                          w.noHp
-                            ? "text-green-700 bg-green-50 hover:bg-green-100 border-green-200"
-                            : "text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed"
-                        }`}
-                        onClick={(e) => !w.noHp && e.preventDefault()}
-                      >
-                        Tagih via WA
-                      </a>
+                      {(() => {
+                        const message = `Om Swastyastu / Halo Bapak/Ibu ${w.namaKepalaKeluarga} (Blok ${w.nomorRumah}),%0A%0AKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *${w.missedMonthsCount} bulan* di tahun berjalan.%0A%0AMohon konfirmasinya jika sudah melakukan pembayaran agar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.%0A%0ATerima kasih banyak atas partisipasi dan dukungannya. 🙏`;
+                        const waLink = w.noHp 
+                          ? `https://wa.me/${w.noHp.replace(/^0/, "62")}?text=${message}` 
+                          : `https://wa.me/?text=${message}`;
+                          
+                        return (
+                          <a
+                            href={waLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border text-green-700 bg-green-50 hover:bg-green-100 border-green-200 transition-colors shadow-sm"
+                            title={w.noHp ? "Kirim WA ke warga" : "Pilih kontak di WA untuk mengirim pesan"}
+                          >
+                            Tagih via WA
+                          </a>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}
