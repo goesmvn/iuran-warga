@@ -14,7 +14,7 @@ import {
 import type { Transaction } from "../../types";
 
 export default function Kas() {
-  const { transactions, addTransaction } = useTransaksi();
+  const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransaksi();
   const { warga } = useWarga();
   const { categories } = useCategory();
   const { locations } = useKasLocation();
@@ -45,12 +45,28 @@ export default function Kas() {
     setIsModalOpen(true);
   };
 
+  const [existingSaldoAwalId, setExistingSaldoAwalId] = useState<string | null>(null);
+
   const openModalSaldo = () => {
-    setDate(`${startYear}-01-01`);
     setCategoryId("cat-saldo-awal");
-    setKasLocationId(DEFAULT_KAS_LOCATION_ID);
-    setNominal("");
-    setDescription("");
+    
+    // Check if default location has existing saldo awal
+    const locId = DEFAULT_KAS_LOCATION_ID;
+    const existing = transactions.find(t => t.categoryId === "cat-saldo-awal" && t.kasLocationId === locId);
+    
+    setKasLocationId(locId);
+    if (existing) {
+       setDate(existing.date.split("T")[0]);
+       setNominal(existing.nominal.toString());
+       setDescription(existing.description || "Saldo Awal Kas");
+       setExistingSaldoAwalId(existing.id);
+    } else {
+       setDate(`${startYear}-01-01`);
+       setNominal("");
+       setDescription("");
+       setExistingSaldoAwalId(null);
+    }
+    
     setIsModalSaldoOpen(true);
   };
 
@@ -95,19 +111,46 @@ export default function Kas() {
     setIsModalOpen(false);
   };
 
+  const handleKasLocationChangeSaldo = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const locId = e.target.value;
+    setKasLocationId(locId);
+    
+    const existing = transactions.find(t => t.categoryId === "cat-saldo-awal" && t.kasLocationId === locId);
+    if (existing) {
+       setDate(existing.date.split("T")[0]);
+       setNominal(existing.nominal.toString());
+       setDescription(existing.description || "Saldo Awal Kas");
+       setExistingSaldoAwalId(existing.id);
+    } else {
+       setDate(`${startYear}-01-01`);
+       setNominal("");
+       setDescription("");
+       setExistingSaldoAwalId(null);
+    }
+  };
+
   const submitSaldoAwal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!kasLocationId) return;
 
-    const payload: Omit<Transaction, "id"> = {
-      date: new Date(date).toISOString(),
-      categoryId: "cat-saldo-awal",
-      type: "Pemasukan",
-      nominal: Number(nominal),
-      description: description || "Saldo Awal Kas",
-      kasLocationId
-    };
-    addTransaction(payload);
+    if (existingSaldoAwalId) {
+      updateTransaction(existingSaldoAwalId, {
+        date: new Date(date).toISOString(),
+        nominal: Number(nominal),
+        description: description || "Saldo Awal Kas",
+        kasLocationId
+      });
+    } else {
+      const payload: Omit<Transaction, "id"> = {
+        date: new Date(date).toISOString(),
+        categoryId: "cat-saldo-awal",
+        type: "Pemasukan",
+        nominal: Number(nominal),
+        description: description || "Saldo Awal Kas",
+        kasLocationId
+      };
+      addTransaction(payload);
+    }
     setIsModalSaldoOpen(false);
   };
 
@@ -175,13 +218,14 @@ export default function Kas() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="text-gray-500 font-medium">
+            <thead className="text-gray-500 font-medium bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="px-6 py-4">Tanggal</th>
                 <th className="px-6 py-4">Kategori</th>
                 <th className="px-6 py-4">Keterangan / Warga</th>
                 <th className="px-6 py-4">Lokasi Kas</th>
                 <th className="px-6 py-4 text-right">Nominal</th>
+                <th className="px-6 py-4 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -234,11 +278,26 @@ export default function Kas() {
                       {tx.type === "Pemasukan" ? "+" : "-"} Rp{" "}
                       {tx.nominal.toLocaleString("id-ID")}
                     </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex justify-center gap-2">
+                         <button
+                           onClick={() => {
+                             if(window.confirm('Yakin menghapus catatan transaksi ini? Aksi ini akan seketika mengubah laporan arus kas seluruh keuangan.')) {
+                               deleteTransaction(tx.id);
+                             }
+                           }}
+                           className="text-red-500 hover:bg-red-50 hover:text-red-700 p-1.5 rounded-lg transition-colors border border-transparent"
+                           title="Hapus Transaksi"
+                         >
+                           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                         </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               {transactions.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-16 text-center">
+                  <td colSpan={6} className="px-6 py-16 text-center">
                     <p className="text-gray-500 font-medium text-lg">
                       Belum ada transaksi terekam.
                     </p>
@@ -396,10 +455,10 @@ export default function Kas() {
                   <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 bg-gray-50/50" />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5">Disimpan di Rekening Kas</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5">Disimpan di Kas / Rekening</label>
                   <div className="relative">
                     <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <select required value={kasLocationId} onChange={e => setKasLocationId(e.target.value)} className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 bg-gray-50/50 font-medium text-gray-900">
+                    <select required value={kasLocationId} onChange={handleKasLocationChangeSaldo} className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 bg-gray-50/50 font-medium text-gray-900">
                       {locations.map(loc => (
                         <option key={loc.id} value={loc.id}>{loc.name} {loc.type !== 'Tunai' ? `(${loc.type})` : ''}</option>
                       ))}
