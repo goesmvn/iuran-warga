@@ -193,7 +193,7 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
 // =====================================================================
 // SETTINGS - [SEC-06] Admin Only
 // =====================================================================
-const ALLOWED_SETTING_KEYS = ['start_year', 'nama_ketua', 'nama_bendahara'];
+const ALLOWED_SETTING_KEYS = ['start_year', 'nama_ketua', 'nama_bendahara', 'nama_organisasi', 'nama_desa', 'alamat', 'maps_url'];
 
 app.get('/api/settings', (req, res) => {
   const settingsArray = db.prepare('SELECT * FROM settings').all();
