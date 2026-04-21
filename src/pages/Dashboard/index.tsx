@@ -273,10 +273,10 @@ export default function Dashboard() {
             </li>
             <li className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
               <span className="text-sm font-medium text-gray-600">
-                Iuran Diterima (Bulan Ini)
+                Riwayat Transaksi Masuk (Bulan Ini)
               </span>
               <span className="font-bold text-green-600">
-                {paidThisMonthIds.size}
+                {transactions.filter(t => t.type === 'Pemasukan' && t.categoryId !== 'cat-saldo-awal' && new Date(t.date).getMonth() + 1 === currentMonth && new Date(t.date).getFullYear() === currentYear).length}
               </span>
             </li>
           </ul>
