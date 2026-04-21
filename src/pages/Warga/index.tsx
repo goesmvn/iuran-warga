@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useWarga } from "../../hooks/useWarga";
-import { Plus, Trash2, Edit2, Upload, Download, Users, Printer } from "lucide-react";
+import { Plus, Trash2, Edit2, Upload, Download, Users, Printer, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import Papa from "papaparse";
 
 import type { Resident } from "../../types";
@@ -21,6 +21,32 @@ export default function Warga() {
   const [tanggalMasuk, setTanggalMasuk] = useState(
     new Date().toISOString().split("T")[0],
   );
+
+  // Search & Pagination Logic
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  const filteredWarga = useMemo(() => {
+    if (!searchQuery) return warga;
+    const lowerQuery = searchQuery.toLowerCase();
+    return warga.filter(w => 
+      w.namaKepalaKeluarga.toLowerCase().includes(lowerQuery) || 
+      w.nomorRumah.toLowerCase().includes(lowerQuery)
+    );
+  }, [warga, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredWarga.length / itemsPerPage));
+  
+  const displayedWarga = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredWarga.slice(start, start + itemsPerPage);
+  }, [filteredWarga, currentPage]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
+  };
 
   const openAddModal = () => {
     setEditingId(null);
@@ -115,8 +141,21 @@ export default function Warga() {
             Data master penghuni lingkungan.
           </p>
         </div>
-        <div className="flex gap-3">
-          <input
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {/* SEARCH INPUT */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Cari nama atau blok..." 
+              value={searchQuery}
+              onChange={handleSearchChange}
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white"
+            />
+          </div>
+          
+          <div className="flex gap-2 shrink-0">
+            <input
             type="file"
             accept=".csv"
             ref={fileInputRef}
@@ -143,6 +182,7 @@ export default function Warga() {
           >
             <Plus className="w-4 h-4" /> Tambah Warga
           </button>
+          </div>
         </div>
       </div>
 
@@ -160,7 +200,7 @@ export default function Warga() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {warga.map((w) => (
+              {displayedWarga.map((w) => (
                 <tr
                   key={w.id}
                   className="hover:bg-gray-50/50 transition-colors"
@@ -236,6 +276,34 @@ export default function Warga() {
               )}
             </tbody>
           </table>
+        </div>
+        
+        {/* Pagination Controls */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span className="text-sm text-gray-500">
+            Menampilkan <span className="font-semibold text-gray-800">{filteredWarga.length === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1}</span> - <span className="font-semibold text-gray-800">{Math.min(currentPage * itemsPerPage, filteredWarga.length)}</span> dari <span className="font-semibold text-gray-800">{filteredWarga.length}</span> warga
+          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium text-gray-700">Halaman {currentPage} dari {totalPages}</span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                title="Halaman Sebelumnya"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                title="Halaman Selanjutnya"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
