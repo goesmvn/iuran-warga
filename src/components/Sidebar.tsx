@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, CreditCard, PieChart, Settings, X, Shield, LogOut, Landmark, Receipt } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, PieChart, Settings, X, Shield, LogOut, Landmark, Receipt, ArrowRightLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -34,23 +34,29 @@ const menuGroups = [
         title: 'Utama',
         items: [
             { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-            { icon: Users, label: 'Data Warga', path: '/warga' },
+            { icon: Receipt, label: 'Terima Pembayaran', path: '/pembayaran' },
         ]
     },
     {
         title: 'Keuangan',
         items: [
-            { icon: Receipt, label: 'Terima Pembayaran', path: '/pembayaran' },
             { icon: CreditCard, label: 'Arus Kas & Buku Besar', path: '/kas' },
+            { icon: ArrowRightLeft, label: 'Transfer Antar Kas', path: '/transfer' },
             { icon: PieChart, label: 'Laporan Keuangan', path: '/laporan' },
         ]
     },
     {
-        title: 'Master Data',
+        title: 'Data',
         items: [
+            { icon: Users, label: 'Data Warga', path: '/warga' },
             { icon: Settings, label: 'Kategori Iuran', path: '/kategori' },
         ]
     }
+];
+
+const adminItems = [
+    { icon: Landmark, label: 'Pengaturan Kas', path: '/lokasi-kas' },
+    { icon: Shield, label: 'Pengelola Sistem', path: '/pengelola' },
 ];
 
 const NavLinks = ({ setMobileOpen }: { setMobileOpen: (open: boolean) => void }) => {
@@ -83,34 +89,23 @@ const NavLinks = ({ setMobileOpen }: { setMobileOpen: (open: boolean) => void })
 
             {user?.role === 'Admin' && (
                 <div>
-                    <h3 className="px-3 mb-2 mt-6 text-xs font-bold uppercase tracking-widest text-purple-400 opacity-80">Sistem Admin</h3>
+                    <h3 className="px-3 mb-2 mt-6 text-xs font-bold uppercase tracking-widest text-gray-400 opacity-80">Pengaturan</h3>
                     <ul className="space-y-1">
-                        <li>
-                            <NavLink
-                                to="/pengelola"
-                                onClick={() => setMobileOpen(false)}
-                                className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-colors ${isActive
-                                    ? 'bg-purple-50 text-purple-700'
-                                    : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'
-                                    }`}
-                            >
-                                <Shield className="w-5 h-5 flex-shrink-0" />
-                                <span>Pengelola Sistem</span>
-                            </NavLink>
-                        </li>
-                        <li>
-                            <NavLink
-                                to="/lokasi-kas"
-                                onClick={() => setMobileOpen(false)}
-                                className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-colors ${isActive
-                                    ? 'bg-blue-50 text-blue-700'
-                                    : 'text-gray-500 hover:bg-gray-50 hover:text-blue-600'
-                                    }`}
-                            >
-                                <Landmark className="w-5 h-5 flex-shrink-0" />
-                                <span>Pengaturan Kas</span>
-                            </NavLink>
-                        </li>
+                        {adminItems.map((item) => (
+                            <li key={item.path}>
+                                <NavLink
+                                    to={item.path}
+                                    onClick={() => setMobileOpen(false)}
+                                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-colors ${isActive
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                                        }`}
+                                >
+                                    <item.icon className="w-5 h-5 flex-shrink-0" />
+                                    <span>{item.label}</span>
+                                </NavLink>
+                            </li>
+                        ))}
                     </ul>
                 </div>
             )}

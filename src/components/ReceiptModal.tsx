@@ -113,7 +113,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
                 {data.items.map((item, idx) => (
                   <div key={idx} className="flex justify-between items-start gap-3">
                     <span className="flex-1">{item.title}</span>
-                    <span className="font-semibold whitespace-nowrap">Rp {item.subTotal.toLocaleString('id-ID')}</span>
+                    <span className="font-semibold whitespace-nowrap">Rp {item.subTotal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 ))}
               </div>
@@ -124,7 +124,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
             {/* Total Area */}
             <div className="flex justify-between items-end mb-6">
               <span className="font-bold text-base">TOTAL</span>
-              <span className="font-bold text-xl print:text-lg tracking-tight">Rp {data.total.toLocaleString('id-ID')}</span>
+              <span className="font-bold text-xl print:text-lg tracking-tight">Rp {data.total.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
 
             {/* Footer */}

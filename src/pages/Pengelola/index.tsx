@@ -516,8 +516,8 @@ export default function Pengelola() {
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Hak Akses Role</label>
                   <select value={role} onChange={e => setRole(e.target.value as 'Admin' | 'Staff')} className={inputClass}>
-                    <option value="Staff">Pencatat (Staff)</option>
-                    <option value="Admin">Ketua/Admin Utama</option>
+                    <option value="Staff">Staff</option>
+                    <option value="Admin">Admin</option>
                   </select>
                 </div>
               </div>

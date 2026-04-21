@@ -49,6 +49,7 @@ export default function Dashboard() {
         (t) =>
           t.type === "Pemasukan" &&
           t.categoryId !== "cat-saldo-awal" &&
+          t.categoryId !== "cat-transfer" &&
           new Date(t.date).getMonth() + 1 === currentMonth &&
           new Date(t.date).getFullYear() === currentYear,
       )
@@ -57,6 +58,7 @@ export default function Dashboard() {
       .filter(
         (t) =>
           t.type === "Pengeluaran" &&
+          t.categoryId !== "cat-transfer" &&
           new Date(t.date).getMonth() + 1 === currentMonth &&
           new Date(t.date).getFullYear() === currentYear,
       )
@@ -68,10 +70,10 @@ export default function Dashboard() {
     return Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
       const inThisMonth = transactions
-        .filter(t => t.type === "Pemasukan" && t.categoryId !== "cat-saldo-awal" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
+        .filter(t => t.type === "Pemasukan" && t.categoryId !== "cat-saldo-awal" && t.categoryId !== "cat-transfer" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
         .reduce((sum, t) => sum + t.nominal, 0);
       const outThisMonth = transactions
-        .filter(t => t.type === "Pengeluaran" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
+        .filter(t => t.type === "Pengeluaran" && t.categoryId !== "cat-transfer" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
         .reduce((sum, t) => sum + t.nominal, 0);
       return { month, in: inThisMonth, out: outThisMonth };
     });
@@ -130,7 +132,7 @@ export default function Dashboard() {
                 Saldo Kas Saat Ini
               </p>
               <h3 className="text-3xl font-bold font-display tracking-tight">
-                Rp {currentBalance.toLocaleString("id-ID")}
+                Rp {currentBalance.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
             <div className="p-3 bg-brand-500/30 rounded-xl backdrop-blur-sm">
@@ -150,7 +152,7 @@ export default function Dashboard() {
                 Pemasukan Bulan Ini
               </p>
               <h3 className="text-2xl font-bold text-gray-900">
-                Rp {thisMonthIn.toLocaleString("id-ID")}
+                Rp {thisMonthIn.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
             <div className="p-3 bg-green-50 rounded-xl">
@@ -166,7 +168,7 @@ export default function Dashboard() {
                 Pengeluaran Bulan Ini
               </p>
               <h3 className="text-2xl font-bold text-gray-900">
-                Rp {thisMonthOut.toLocaleString("id-ID")}
+                Rp {thisMonthOut.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
             <div className="p-3 bg-red-50 rounded-xl">
@@ -212,7 +214,7 @@ export default function Dashboard() {
              <div className="min-w-0">
                 <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-0.5">{loc.type}</p>
                 <h4 className="font-bold text-gray-900 text-sm md:text-base truncate">{loc.name}</h4>
-                <p className={`font-bold text-base md:text-lg leading-none mt-1 ${loc.balance < 0 ? 'text-red-500' : 'text-green-600'}`}>Rp {loc.balance.toLocaleString('id-ID')}</p>
+                <p className={`font-bold text-base md:text-lg leading-none mt-1 ${loc.balance < 0 ? 'text-red-500' : 'text-green-600'}`}>Rp {loc.balance.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
              </div>
           </div>
         ))}
@@ -239,8 +241,8 @@ export default function Dashboard() {
                 {/* Tooltip */}
                 <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity flex flex-col items-center z-20 whitespace-nowrap">
                   <span className="font-bold mb-1">{new Date(2000, d.month - 1).toLocaleString("id-ID", { month: "short" })}</span>
-                  <span className="text-green-300">+Rp {d.in.toLocaleString('id-ID')}</span>
-                  <span className="text-red-300">-Rp {d.out.toLocaleString('id-ID')}</span>
+                  <span className="text-green-300">+Rp {d.in.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-red-300">-Rp {d.out.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 
                 {/* X-axis label */}

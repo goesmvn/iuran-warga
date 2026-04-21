@@ -324,7 +324,7 @@ export default function BuatIuranWizard() {
                 <span className="text-gray-500 text-sm">Besaran Nominal</span>
                 <span className="font-bold text-gray-900">
                   {nominal
-                    ? `Rp ${Number(nominal).toLocaleString("id-ID")}`
+                    ? `Rp ${Number(nominal).toLocaleString('id-ID')}`
                     : "Flekibel (Manual)"}
                 </span>
               </div>

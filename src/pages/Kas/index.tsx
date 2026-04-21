@@ -8,6 +8,7 @@ import {
   Minus,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowRightLeft,
   Landmark,
   Plus,
 } from "lucide-react";
@@ -247,20 +248,27 @@ export default function Kas() {
                       })}
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold ${
-                          tx.type === "Pemasukan"
-                            ? "bg-green-50 text-green-700"
-                            : "bg-red-50 text-red-700"
-                        }`}
-                      >
-                        {tx.type === "Pemasukan" ? (
-                          <ArrowDownRight className="w-3 h-3" />
-                        ) : (
-                          <ArrowUpRight className="w-3 h-3" />
-                        )}
-                        {getCategoryName(tx.categoryId)}
-                      </span>
+                      {tx.categoryId === "cat-transfer" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700">
+                          <ArrowRightLeft className="w-3 h-3" />
+                          Transfer
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold ${
+                            tx.type === "Pemasukan"
+                              ? "bg-green-50 text-green-700"
+                              : "bg-red-50 text-red-700"
+                          }`}
+                        >
+                          {tx.type === "Pemasukan" ? (
+                            <ArrowDownRight className="w-3 h-3" />
+                          ) : (
+                            <ArrowUpRight className="w-3 h-3" />
+                          )}
+                          {getCategoryName(tx.categoryId)}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-gray-800 font-semibold max-w-[200px] truncate">
                       {tx.type === "Pemasukan"
@@ -276,7 +284,7 @@ export default function Kas() {
                       className={`px-6 py-4 text-right font-bold ${tx.type === "Pemasukan" ? "text-green-600" : "text-red-600"}`}
                     >
                       {tx.type === "Pemasukan" ? "+" : "-"} Rp{" "}
-                      {tx.nominal.toLocaleString("id-ID")}
+                      {tx.nominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex justify-center gap-2">

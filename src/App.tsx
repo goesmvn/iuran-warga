@@ -39,6 +39,7 @@ import Login from './pages/Auth/Login';
 import Pengelola from './pages/Pengelola';
 import Pembayaran from './pages/Pembayaran';
 import LokasiKas from './pages/LokasiKas';
+import Transfer from './pages/Transfer';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -77,6 +78,7 @@ function AppRoutes() {
       <Route path="/laporan" element={<Laporan />} />
       <Route path="/pengelola" element={<Pengelola />} />
       <Route path="/lokasi-kas" element={<LokasiKas />} />
+      <Route path="/transfer" element={<Transfer />} />
     </Routes>
   );
 }

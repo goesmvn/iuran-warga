@@ -375,7 +375,7 @@ export default function Pembayaran() {
                                    <h4 className="text-lg font-bold text-green-700 flex items-center gap-1.5"><Check className="w-5 h-5"/> Lunas 100%</h4>
                                 ) : (
                                    <h4 className="text-lg font-bold text-gray-900">
-                                     Total Tunggakan: <span className="text-[#e11d48]">Rp {tunggakanStats.totalNominal.toLocaleString('id-ID')}</span>
+                                     Total Tunggakan: <span className="text-[#e11d48]">Rp {tunggakanStats.totalNominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                    </h4>
                                 )}
                              </div>
@@ -393,7 +393,7 @@ export default function Pembayaran() {
                                         <span className="font-bold text-gray-700">Tahun {a.year}</span>
                                         <div className="text-right flex items-center gap-2">
                                             <span className="text-gray-500 font-medium text-[11px]">{a.unpaid} bln</span>
-                                            <span className="font-bold text-[#e11d48]">Rp {a.nominal.toLocaleString('id-ID')}</span>
+                                            <span className="font-bold text-[#e11d48]">Rp {a.nominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -492,7 +492,7 @@ export default function Pembayaran() {
                     {summaryDetails.length > 0 ? summaryDetails.map((item) => (
                         <div key={item.id} className="flex justify-between items-start gap-4">
                             <span className="text-gray-300 leading-tight">{item.title}</span>
-                            <span className="font-bold whitespace-nowrap">Rp {item.subTotal.toLocaleString('id-ID')}</span>
+                            <span className="font-bold whitespace-nowrap">Rp {item.subTotal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                     )) : (
                         <div className="text-gray-500 text-center py-4 border border-dashed border-gray-700 rounded-lg">Belum ada rincian iuran terpilih.</div>
@@ -502,7 +502,7 @@ export default function Pembayaran() {
                 <div className="pt-4 border-t border-gray-700 mb-8">
                     <div className="flex justify-between items-end mb-1">
                         <span className="text-gray-400 font-bold uppercase tracking-widest textxs">Total Tagihan</span>
-                        <span className="text-[#f43f5e] text-2xl font-bold font-display tracking-tight leading-none">Rp {grandTotal.toLocaleString('id-ID')}</span>
+                        <span className="text-[#f43f5e] text-2xl font-bold font-display tracking-tight leading-none">Rp {grandTotal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 </div>
 

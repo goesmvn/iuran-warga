@@ -48,7 +48,7 @@ export default function Laporan() {
 
   const getSaldoAwalBulan = (month: number, year: number) => {
     const beforeDate = new Date(year, month - 1, 1);
-    const earlierTxs = transactions.filter(t => new Date(t.date) < beforeDate);
+    const earlierTxs = transactions.filter(t => new Date(t.date) < beforeDate && t.categoryId !== 'cat-transfer');
     const earlierIn = earlierTxs.filter(t => t.type === 'Pemasukan').reduce((a, b) => a + b.nominal, 0);
     const earlierOut = earlierTxs.filter(t => t.type === 'Pengeluaran').reduce((a, b) => a + b.nominal, 0);
 
@@ -62,10 +62,10 @@ export default function Laporan() {
   const saldoAwalBulanan = getSaldoAwalBulan(filterMonth, filterYear);
 
   const monthlyIn = monthlyTransactions
-    .filter((t) => t.type === "Pemasukan" && t.categoryId !== "cat-saldo-awal")
+    .filter((t) => t.type === "Pemasukan" && t.categoryId !== "cat-saldo-awal" && t.categoryId !== "cat-transfer")
     .reduce((sum, t) => sum + t.nominal, 0);
   const monthlyOut = monthlyTransactions
-    .filter((t) => t.type === "Pengeluaran")
+    .filter((t) => t.type === "Pengeluaran" && t.categoryId !== "cat-transfer")
     .reduce((sum, t) => sum + t.nominal, 0);
 
   const saldoAkhirBulanan = saldoAwalBulanan + monthlyIn - monthlyOut;
@@ -153,8 +153,8 @@ export default function Laporan() {
   const yearCurrent = filterYearTahunan;
   const yearPrev = filterYearTahunan - 1;
 
-  const incomeCategories = categories.filter(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal');
-  const expenseCategories = categories.filter(c => c.type === 'Pengeluaran');
+  const incomeCategories = categories.filter(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
+  const expenseCategories = categories.filter(c => c.type === 'Pengeluaran' && c.id !== 'cat-transfer');
 
   const getCategorySum = (categoryId: string, year: number) => {
     return transactions
@@ -197,8 +197,8 @@ export default function Laporan() {
         return d.getMonth() + 1 === m && d.getFullYear() === filterYearTahunan;
       });
 
-      const masuk = monthTxs.filter(t => t.type === 'Pemasukan' && t.categoryId !== 'cat-saldo-awal').reduce((s, t) => s + t.nominal, 0);
-      const keluar = monthTxs.filter(t => t.type === 'Pengeluaran').reduce((s, t) => s + t.nominal, 0);
+      const masuk = monthTxs.filter(t => t.type === 'Pemasukan' && t.categoryId !== 'cat-saldo-awal' && t.categoryId !== 'cat-transfer').reduce((s, t) => s + t.nominal, 0);
+      const keluar = monthTxs.filter(t => t.type === 'Pengeluaran' && t.categoryId !== 'cat-transfer').reduce((s, t) => s + t.nominal, 0);
       const saldoAwalInMonth = monthTxs.filter(t => t.categoryId === 'cat-saldo-awal').reduce((s, t) => s + t.nominal, 0);
 
       const saldoAwalBulan = saldoBerjalan + saldoAwalInMonth;
@@ -433,8 +433,8 @@ export default function Laporan() {
                     Saldo Awal
                     <div className="absolute inset-0 bg-blue-50/30"></div>
                   </td>
-                  <td className="py-2.5 px-4 border border-gray-400 border-b-2 text-right font-extrabold text-blue-900 bg-blue-50/30">Rp {getSaldoAwal(yearPrev).toLocaleString('id-ID')}</td>
-                  <td className="py-2.5 px-4 border border-gray-400 border-b-2 text-right font-extrabold text-blue-900 bg-blue-100/50">Rp {getSaldoAwal(yearCurrent).toLocaleString('id-ID')}</td>
+                  <td className="py-2.5 px-4 border border-gray-400 border-b-2 text-right font-extrabold text-blue-900 bg-blue-50/30">Rp {getSaldoAwal(yearPrev).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="py-2.5 px-4 border border-gray-400 border-b-2 text-right font-extrabold text-blue-900 bg-blue-100/50">Rp {getSaldoAwal(yearCurrent).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
 
                 {/* PENERIMAAN */}
@@ -444,14 +444,14 @@ export default function Laporan() {
                 {incomeCategories.map(cat => (
                   <tr key={cat.id} className="hover:bg-gray-50 transition-colors">
                     <td className="py-2 px-4 border border-gray-300 pl-8 text-gray-700">{cat.name}</td>
-                    <td className="py-2 px-4 border border-gray-300 border-r-4 border-r-gray-100 text-right text-gray-700 font-medium">Rp {getCategorySum(cat.id, yearPrev).toLocaleString('id-ID')}</td>
-                    <td className="py-2 px-4 border border-gray-300 text-right text-gray-800 font-semibold bg-gray-50/30">Rp {getCategorySum(cat.id, yearCurrent).toLocaleString('id-ID')}</td>
+                    <td className="py-2 px-4 border border-gray-300 border-r-4 border-r-gray-100 text-right text-gray-700 font-medium">Rp {getCategorySum(cat.id, yearPrev).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="py-2 px-4 border border-gray-300 text-right text-gray-800 font-semibold bg-gray-50/30">Rp {getCategorySum(cat.id, yearCurrent).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
                 <tr className="bg-gray-100/80 print:bg-gray-100 print:!bg-gray-100">
                   <td className="py-2.5 px-4 border border-gray-400 font-bold text-gray-900 italic">Total Penerimaan</td>
-                  <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 border-r-4 border-r-gray-200">Rp {getTotalPenerimaan(yearPrev).toLocaleString('id-ID')}</td>
-                  <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 bg-gray-200/50">Rp {getTotalPenerimaan(yearCurrent).toLocaleString('id-ID')}</td>
+                  <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 border-r-4 border-r-gray-200">Rp {getTotalPenerimaan(yearPrev).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 bg-gray-200/50">Rp {getTotalPenerimaan(yearCurrent).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
 
                 {/* PENGELUARAN */}
@@ -461,28 +461,28 @@ export default function Laporan() {
                 {expenseCategories.map(cat => (
                   <tr key={cat.id} className="hover:bg-gray-50 transition-colors">
                     <td className="py-2 px-4 border border-gray-300 pl-8 text-gray-700">{cat.name}</td>
-                    <td className="py-2 px-4 border border-gray-300 border-r-4 border-r-gray-100 text-right text-gray-700 font-medium">Rp {getCategorySum(cat.id, yearPrev).toLocaleString('id-ID')}</td>
-                    <td className="py-2 px-4 border border-gray-300 text-right text-gray-800 font-semibold bg-gray-50/30">Rp {getCategorySum(cat.id, yearCurrent).toLocaleString('id-ID')}</td>
+                    <td className="py-2 px-4 border border-gray-300 border-r-4 border-r-gray-100 text-right text-gray-700 font-medium">Rp {getCategorySum(cat.id, yearPrev).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="py-2 px-4 border border-gray-300 text-right text-gray-800 font-semibold bg-gray-50/30">Rp {getCategorySum(cat.id, yearCurrent).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
                 <tr className="bg-gray-100/80 print:bg-gray-100 print:!bg-gray-100">
                   <td className="py-2.5 px-4 border border-gray-400 font-bold text-gray-900 italic">Total Pengeluaran</td>
-                  <td className="py-2.5 px-4 border border-gray-400 border-r-4 border-r-gray-200 text-right font-bold text-gray-900">Rp {getTotalPengeluaran(yearPrev).toLocaleString('id-ID')}</td>
-                  <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 bg-gray-200/50">Rp {getTotalPengeluaran(yearCurrent).toLocaleString('id-ID')}</td>
+                  <td className="py-2.5 px-4 border border-gray-400 border-r-4 border-r-gray-200 text-right font-bold text-gray-900">Rp {getTotalPengeluaran(yearPrev).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 bg-gray-200/50">Rp {getTotalPengeluaran(yearCurrent).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
 
                 {/* SURPLUS / DEFISIT MURNI */}
                 <tr className="bg-orange-50/50 print:bg-transparent">
                   <td className="py-3 px-4 border border-gray-400 font-bold text-orange-900">Kenaikan / (Penurunan) Kas Bersih<br /><span className="text-xs font-normal text-gray-500">Total Penerimaan - Total Pengeluaran</span></td>
-                  <td className="py-3 px-4 border border-gray-400 border-r-4 border-r-gray-200 text-right font-bold text-orange-900">Rp {(getTotalPenerimaan(yearPrev) - getTotalPengeluaran(yearPrev)).toLocaleString('id-ID')}</td>
-                  <td className="py-3 px-4 border border-gray-400 text-right font-bold text-orange-900 bg-orange-100/50">Rp {(getTotalPenerimaan(yearCurrent) - getTotalPengeluaran(yearCurrent)).toLocaleString('id-ID')}</td>
+                  <td className="py-3 px-4 border border-gray-400 border-r-4 border-r-gray-200 text-right font-bold text-orange-900">Rp {(getTotalPenerimaan(yearPrev) - getTotalPengeluaran(yearPrev)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="py-3 px-4 border border-gray-400 text-right font-bold text-orange-900 bg-orange-100/50">Rp {(getTotalPenerimaan(yearCurrent) - getTotalPengeluaran(yearCurrent)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
 
                 {/* TOTAL AKHIR */}
                 <tr className="bg-brand-50 print:bg-transparent">
                   <td className="py-4 px-4 border-2 border-gray-400 font-extrabold text-brand-950 uppercase tracking-wider text-sm">TOTAL KAS {namaOrganisasi.toUpperCase()}</td>
-                  <td className="py-4 px-4 border-2 border-gray-400 text-right font-extrabold text-brand-900 text-sm">Rp {getTotalKasAkhir(yearPrev).toLocaleString('id-ID')}</td>
-                  <td className="py-4 px-4 border-2 border-gray-400 text-right font-extrabold text-brand-900 text-sm bg-brand-100/50">Rp {getTotalKasAkhir(yearCurrent).toLocaleString('id-ID')}</td>
+                  <td className="py-4 px-4 border-2 border-gray-400 text-right font-extrabold text-brand-900 text-sm">Rp {getTotalKasAkhir(yearPrev).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="py-4 px-4 border-2 border-gray-400 text-right font-extrabold text-brand-900 text-sm bg-brand-100/50">Rp {getTotalKasAkhir(yearCurrent).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
               </tbody>
             </table>
@@ -514,16 +514,16 @@ export default function Laporan() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 print:hidden">
             <div className="bg-green-50 border border-green-200 p-5 rounded-2xl">
               <p className="text-green-700 text-xs font-bold uppercase tracking-wider mb-1">Total Pemasukan</p>
-              <h4 className="text-xl font-bold text-green-800">Rp {totalArusKas.masuk.toLocaleString('id-ID')}</h4>
+              <h4 className="text-xl font-bold text-green-800">Rp {totalArusKas.masuk.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
             </div>
             <div className="bg-red-50 border border-red-200 p-5 rounded-2xl">
               <p className="text-red-700 text-xs font-bold uppercase tracking-wider mb-1">Total Pengeluaran</p>
-              <h4 className="text-xl font-bold text-red-800">Rp {totalArusKas.keluar.toLocaleString('id-ID')}</h4>
+              <h4 className="text-xl font-bold text-red-800">Rp {totalArusKas.keluar.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
             </div>
             <div className={`p-5 rounded-2xl border ${totalArusKas.netto >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'}`}>
               <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${totalArusKas.netto >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>Arus Kas Bersih</p>
               <h4 className={`text-xl font-bold ${totalArusKas.netto >= 0 ? 'text-blue-800' : 'text-orange-800'}`}>
-                {totalArusKas.netto >= 0 ? '+' : ''} Rp {totalArusKas.netto.toLocaleString('id-ID')}
+                {totalArusKas.netto >= 0 ? '+' : ''} Rp {totalArusKas.netto.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h4>
             </div>
           </div>
@@ -545,16 +545,16 @@ export default function Laporan() {
                   <div className="space-y-1.5 mb-3">
                     <div className="flex justify-between w-full text-xs">
                       <span className="text-gray-500">Pemasukan</span>
-                      <span className="font-semibold text-green-700">Rp {loc.masuk.toLocaleString('id-ID')}</span>
+                      <span className="font-semibold text-green-700">Rp {loc.masuk.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between w-full text-xs">
                       <span className="text-gray-500">Pengeluaran</span>
-                      <span className="font-semibold text-red-600">Rp {loc.keluar.toLocaleString('id-ID')}</span>
+                      <span className="font-semibold text-red-600">Rp {loc.keluar.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                   <div className="flex justify-between w-full mt-auto items-center pt-2 border-t border-gray-100">
                     <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500">Saldo Akhir</span>
-                    <span className="font-bold text-lg text-brand-700">Rp {loc.saldo.toLocaleString('id-ID')}</span>
+                    <span className="font-bold text-lg text-brand-700">Rp {loc.saldo.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               ))}
@@ -577,17 +577,17 @@ export default function Laporan() {
                     <tr key={`print-${loc.id}`}>
                       <td className="py-2 px-4 border border-gray-400 font-semibold text-gray-900">{loc.name}</td>
                       <td className="py-2 px-4 border border-gray-400 text-gray-700 text-xs">{loc.type}</td>
-                      <td className="py-2 px-4 border border-gray-400 text-right font-medium">Rp {loc.masuk.toLocaleString('id-ID')}</td>
-                      <td className="py-2 px-4 border border-gray-400 text-right font-medium">Rp {loc.keluar.toLocaleString('id-ID')}</td>
-                      <td className="py-2 px-4 border border-gray-400 text-right font-bold text-gray-900 bg-gray-50/50">Rp {loc.saldo.toLocaleString('id-ID')}</td>
+                      <td className="py-2 px-4 border border-gray-400 text-right font-medium">Rp {loc.masuk.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 px-4 border border-gray-400 text-right font-medium">Rp {loc.keluar.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 px-4 border border-gray-400 text-right font-bold text-gray-900 bg-gray-50/50">Rp {loc.saldo.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
                   ))}
                   {/* Row Total */}
                   <tr className="bg-gray-100/80 print:bg-gray-100 print:!bg-gray-100">
                     <td colSpan={2} className="py-2.5 px-4 border border-gray-400 font-extrabold uppercase tracking-wider text-xs text-right">Total Keseluruhan</td>
-                    <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 text-sm">Rp {kasBalances.reduce((s, loc) => s + loc.masuk, 0).toLocaleString('id-ID')}</td>
-                    <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 text-sm">Rp {kasBalances.reduce((s, loc) => s + loc.keluar, 0).toLocaleString('id-ID')}</td>
-                    <td className="py-2.5 px-4 border border-gray-400 text-right font-extrabold text-blue-900 bg-blue-100/50">Rp {kasBalances.reduce((s, loc) => s + loc.saldo, 0).toLocaleString('id-ID')}</td>
+                    <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 text-sm">Rp {kasBalances.reduce((s, loc) => s + loc.masuk, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="py-2.5 px-4 border border-gray-400 text-right font-bold text-gray-900 text-sm">Rp {kasBalances.reduce((s, loc) => s + loc.keluar, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="py-2.5 px-4 border border-gray-400 text-right font-extrabold text-blue-900 bg-blue-100/50">Rp {kasBalances.reduce((s, loc) => s + loc.saldo, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 </tbody>
               </table>
@@ -615,25 +615,25 @@ export default function Laporan() {
                   {arusKasData.map((d, idx) => (
                     <tr key={d.bulan} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-gray-50 transition-colors print:bg-transparent`}>
                       <td className="px-4 py-2.5 border border-gray-200 font-semibold text-gray-800 capitalize">{d.namabulan}</td>
-                      <td className="px-4 py-2.5 border border-gray-200 text-right text-gray-600 font-medium">Rp {d.saldoAwal.toLocaleString('id-ID')}</td>
-                      <td className="px-4 py-2.5 border border-gray-200 text-right text-green-700 font-semibold">{d.masuk > 0 ? `Rp ${d.masuk.toLocaleString('id-ID')}` : '-'}</td>
-                      <td className="px-4 py-2.5 border border-gray-200 text-right text-red-600 font-semibold">{d.keluar > 0 ? `Rp ${d.keluar.toLocaleString('id-ID')}` : '-'}</td>
+                      <td className="px-4 py-2.5 border border-gray-200 text-right text-gray-600 font-medium">Rp {d.saldoAwal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-2.5 border border-gray-200 text-right text-green-700 font-semibold">{d.masuk > 0 ? `Rp ${d.masuk.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                      <td className="px-4 py-2.5 border border-gray-200 text-right text-red-600 font-semibold">{d.keluar > 0 ? `Rp ${d.keluar.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
                       <td className={`px-4 py-2.5 border border-gray-200 text-right font-bold ${d.netto >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                        {d.netto >= 0 ? '+' : ''}{d.netto !== 0 ? `Rp ${d.netto.toLocaleString('id-ID')}` : '-'}
+                        {d.netto >= 0 ? '+' : ''}{d.netto !== 0 ? `Rp ${d.netto.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                       </td>
-                      <td className="px-4 py-2.5 border border-gray-200 text-right font-bold text-gray-900">Rp {d.saldoAkhir.toLocaleString('id-ID')}</td>
+                      <td className="px-4 py-2.5 border border-gray-200 text-right font-bold text-gray-900">Rp {d.saldoAkhir.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
                   ))}
                   {/* TOTAL ROW */}
                   <tr className="bg-gray-800 text-white print:bg-gray-200 print:text-gray-900">
                     <td className="px-4 py-3 border border-gray-600 print:border-gray-400 font-extrabold uppercase tracking-wider text-xs">Total</td>
-                    <td className="px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-bold">Rp {getSaldoAwal(filterYearTahunan).toLocaleString('id-ID')}</td>
-                    <td className="px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-bold text-green-300 print:text-green-800">Rp {totalArusKas.masuk.toLocaleString('id-ID')}</td>
-                    <td className="px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-bold text-red-300 print:text-red-800">Rp {totalArusKas.keluar.toLocaleString('id-ID')}</td>
+                    <td className="px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-bold">Rp {getSaldoAwal(filterYearTahunan).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-bold text-green-300 print:text-green-800">Rp {totalArusKas.masuk.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-bold text-red-300 print:text-red-800">Rp {totalArusKas.keluar.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className={`px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-bold ${totalArusKas.netto >= 0 ? 'text-green-300 print:text-green-800' : 'text-red-300 print:text-red-800'}`}>
-                      {totalArusKas.netto >= 0 ? '+' : ''}Rp {totalArusKas.netto.toLocaleString('id-ID')}
+                      {totalArusKas.netto >= 0 ? '+' : ''}Rp {totalArusKas.netto.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-extrabold">Rp {getTotalKasAkhir(filterYearTahunan).toLocaleString('id-ID')}</td>
+                    <td className="px-4 py-3 border border-gray-600 print:border-gray-400 text-right font-extrabold">Rp {getTotalKasAkhir(filterYearTahunan).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 </tbody>
               </table>
@@ -654,11 +654,11 @@ export default function Laporan() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2 print:gap-4">
             <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl shadow-sm print:rounded-lg print:p-4">
               <p className="text-blue-800 text-sm font-medium mb-1">Saldo Kas Awal Bulan</p>
-              <h4 className="text-2xl font-bold text-blue-900 print:text-lg">Rp {saldoAwalBulanan.toLocaleString("id-ID")}</h4>
+              <h4 className="text-2xl font-bold text-blue-900 print:text-lg">Rp {saldoAwalBulanan.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
             </div>
             <div className="bg-brand-600 outline outline-4 outline-brand-600/20 text-white p-6 rounded-2xl shadow-sm print:bg-gray-800 print:rounded-lg print:p-4 print:outline-none">
               <p className="text-brand-100 text-sm font-medium mb-1 print:text-gray-300">Saldo Kas Akhir Bulan</p>
-              <h4 className="text-2xl font-bold print:text-lg">Rp {saldoAkhirBulanan.toLocaleString("id-ID")}</h4>
+              <h4 className="text-2xl font-bold print:text-lg">Rp {saldoAkhirBulanan.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
             </div>
           </div>
 
@@ -668,7 +668,7 @@ export default function Laporan() {
                 Penerimaan Bulan Ini
               </p>
               <h4 className="text-2xl font-bold text-green-600 print:text-lg">
-                Rp {monthlyIn.toLocaleString("id-ID")}
+                Rp {monthlyIn.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h4>
               <div className="mt-4 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden print:hidden">
                 <div className="h-full bg-green-500 w-full"></div>
@@ -679,7 +679,7 @@ export default function Laporan() {
                 Pengeluaran Bulan Ini
               </p>
               <h4 className="text-2xl font-bold text-red-600 print:text-lg">
-                Rp {monthlyOut.toLocaleString("id-ID")}
+                Rp {monthlyOut.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h4>
               <div className="mt-4 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden print:hidden">
                 {monthlyOut > 0 ? (
@@ -704,7 +704,7 @@ export default function Laporan() {
                 className={`text-2xl font-bold print:text-lg ${monthlyIn >= monthlyOut ? "text-green-700" : "text-orange-700"}`}
               >
                 {monthlyIn >= monthlyOut ? "+" : "-"} Rp{" "}
-                {Math.abs(monthlyIn - monthlyOut).toLocaleString("id-ID")}
+                {Math.abs(monthlyIn - monthlyOut).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h4>
             </div>
           </div>
@@ -731,7 +731,7 @@ export default function Laporan() {
                     <span
                       className={`font-semibold ${item.category.type === "Pemasukan" ? "text-green-600" : "text-red-600"}`}
                     >
-                      Rp {item.amount.toLocaleString("id-ID")}
+                      Rp {item.amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 ))}

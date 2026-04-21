@@ -32,6 +32,9 @@ export interface Transaction {
     residentId?: string;
     periodeBulan?: number; // 1-12
     periodeTahun?: number;
+    // Fields specific to Transfer Antar Kas
+    transferId?: string; // Shared ID linking paired transfer transactions
+    transferToKasLocationId?: string; // Destination kas (on outgoing leg)
 }
 
 export interface User {

@@ -171,7 +171,7 @@ export default function DaftarIuran() {
                     </td>
                     <td className="px-4 py-3 border border-gray-200 text-right">
                       {cat.defaultNominal ? (
-                        <span className="font-bold text-gray-900 tracking-tight">Rp {cat.defaultNominal.toLocaleString('id-ID')}</span>
+                        <span className="font-bold text-gray-900 tracking-tight">Rp {cat.defaultNominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       ) : (
                         <span className="text-gray-400 font-medium text-xs">Bebas/Sukarela</span>
                       )}
