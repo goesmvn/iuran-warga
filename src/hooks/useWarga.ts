@@ -84,7 +84,16 @@ export function useWarga() {
         setWarga(prev => prev.filter(w => w.id !== id)); // Optimistic
         
         try {
-            await apiFetch(`/api/warga/${id}`, { method: 'DELETE' });
+            const res = await apiFetch(`/api/warga/${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const data = await res.json();
+                alert(data.error || 'Gagal menghapus warga.');
+                if (targetWarga) {
+                    setWarga(prev => [...prev, targetWarga]);
+                } else {
+                    fetchWarga();
+                }
+            }
         } catch (err) {
             console.error("Failed to delete Warga. Rolling back UI.", err);
             if (targetWarga) {

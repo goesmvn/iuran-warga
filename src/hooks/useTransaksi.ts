@@ -16,11 +16,22 @@ export function useTransaksi() {
         const id = `tx-${Date.now()}`;
         const payload = { ...newTx, id };
         setTransactions(prev => [...prev, payload]); // Optimistic
-        await apiFetch('/api/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        try {
+            const res = await apiFetch('/api/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: 'Gagal menyimpan transaksi.' }));
+                console.error('[addTransaction] Server error:', err);
+                setTransactions(prev => prev.filter(t => t.id !== id)); // Rollback
+                throw new Error(err.error || 'Gagal menyimpan transaksi.');
+            }
+        } catch (e) {
+            setTransactions(prev => prev.filter(t => t.id !== id)); // Rollback
+            throw e;
+        }
     };
 
     const updateTransaction = async (id: string, updatedData: Partial<Transaction>) => {

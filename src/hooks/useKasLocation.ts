@@ -39,8 +39,19 @@ export function useKasLocation() {
             alert('Lokasi Kas default tidak bisa dihapus.');
             return;
         }
+        const prevLocations = [...locations];
         setLocations(prev => prev.filter(l => l.id !== id));
-        await apiFetch(`/api/kas-locations/${id}`, { method: 'DELETE' });
+        try {
+            const res = await apiFetch(`/api/kas-locations/${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const data = await res.json();
+                alert(data.error || 'Gagal menghapus lokasi kas.');
+                setLocations(prevLocations);
+            }
+        } catch {
+            alert('Gagal menghapus lokasi kas. Periksa koneksi Anda.');
+            setLocations(prevLocations);
+        }
     };
 
     return { locations, addLocation, updateLocation, deleteLocation };

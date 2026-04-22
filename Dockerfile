@@ -54,4 +54,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 EXPOSE 3088
 
+ENV HOST=0.0.0.0 PORT=3088
 CMD ["node", "server/index.js"]

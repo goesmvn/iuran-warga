@@ -259,8 +259,15 @@ app.put('/api/warga/:id', (req, res) => {
 });
 
 app.delete('/api/warga/:id', requireAdmin, (req, res) => {
-  db.prepare('DELETE FROM warga WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+  try {
+    db.prepare('DELETE FROM warga WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message.includes('FOREIGN KEY constraint failed')) {
+      return res.status(409).json({ error: 'Tidak bisa menghapus warga ini karena masih memiliki transaksi. Hapus transaksi terkait terlebih dahulu.' });
+    }
+    throw e;
+  }
 });
 
 // =====================================================================
@@ -289,8 +296,15 @@ app.post('/api/transactions', (req, res) => {
   if (!['Pemasukan', 'Pengeluaran'].includes(type)) return res.status(400).json({ error: 'Tipe transaksi tidak valid.' });
   if (nominal <= 0) return res.status(400).json({ error: 'Nominal harus lebih dari 0.' });
 
-  db.prepare('INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId);
-  res.json({ success: true, id });
+  try {
+    db.prepare('INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId);
+    res.json({ success: true, id });
+  } catch (e) {
+    if (e.message.includes('FOREIGN KEY constraint failed')) {
+      return res.status(400).json({ error: 'Data referensi tidak valid. Pastikan kategori, warga, dan lokasi kas yang dipilih masih ada.' });
+    }
+    throw e;
+  }
 });
 
 app.delete('/api/transactions/:id', requireAdmin, (req, res) => {
@@ -331,8 +345,15 @@ app.put('/api/kas-locations/:id', requireAdmin, (req, res) => {
 });
 
 app.delete('/api/kas-locations/:id', requireAdmin, (req, res) => {
-  db.prepare('DELETE FROM kas_locations WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+  try {
+    db.prepare('DELETE FROM kas_locations WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message.includes('FOREIGN KEY constraint failed')) {
+      return res.status(409).json({ error: 'Tidak bisa menghapus lokasi kas ini karena masih digunakan oleh transaksi. Hapus atau pindahkan transaksi terkait terlebih dahulu.' });
+    }
+    throw e;
+  }
 });
 
 // =====================================================================
@@ -370,8 +391,15 @@ app.put('/api/categories/:id', requireAdmin, (req, res) => {
 });
 
 app.delete('/api/categories/:id', requireAdmin, (req, res) => {
-  db.prepare('DELETE FROM categories WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+  try {
+    db.prepare('DELETE FROM categories WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message.includes('FOREIGN KEY constraint failed')) {
+      return res.status(409).json({ error: 'Tidak bisa menghapus kategori ini karena masih digunakan oleh transaksi. Hapus transaksi terkait terlebih dahulu.' });
+    }
+    throw e;
+  }
 });
 
 // =====================================================================
@@ -436,6 +464,7 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Terjadi kesalahan pada server.' });
 });
 
-app.listen(port, () => {
-  console.log(`JepunKas API running on port ${port}`);
+const host = process.env.HOST || '127.0.0.1';
+app.listen(port, host, () => {
+  console.log(`JepunKas API running on ${host}:${port}`);
 });

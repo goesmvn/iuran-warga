@@ -18,6 +18,7 @@ const db = new Database(dbPath);
 
 // Performance tuning for SQLite (WAL mode is drastically faster and safer for concurrent access)
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 const initDB = () => {
   // CREATE TABLES
@@ -124,6 +125,10 @@ const initDB = () => {
   // Ensure 'Saldo Awal' category always exists without overwriting existing data
   const insertSaldoAwal = db.prepare('INSERT OR IGNORE INTO categories (id, name, type, defaultNominal, periode) VALUES (?, ?, ?, ?, ?)');
   insertSaldoAwal.run('cat-saldo-awal', 'Saldo Awal / Sisa Kas Lama', 'Pemasukan', null, 'Insidental');
+
+  // Ensure 'Transfer Antar Kas' category always exists
+  const insertTransfer = db.prepare('INSERT OR IGNORE INTO categories (id, name, type, defaultNominal, periode, showInPayment) VALUES (?, ?, ?, ?, ?, ?)');
+  insertTransfer.run('cat-transfer', 'Transfer Antar Kas', 'Pengeluaran', null, 'Insidental', 0);
 };
 
 initDB();

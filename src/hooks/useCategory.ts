@@ -33,8 +33,19 @@ export function useCategory() {
     };
 
     const deleteCategory = async (id: string) => {
+        const prevCategories = [...categories];
         setCategories(prev => prev.filter(c => c.id !== id));
-        await apiFetch(`/api/categories/${id}`, { method: 'DELETE' });
+        try {
+            const res = await apiFetch(`/api/categories/${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const data = await res.json();
+                alert(data.error || 'Gagal menghapus kategori.');
+                setCategories(prevCategories);
+            }
+        } catch {
+            alert('Gagal menghapus kategori. Periksa koneksi Anda.');
+            setCategories(prevCategories);
+        }
     };
 
     return { categories, addCategory, updateCategory, deleteCategory };
