@@ -282,12 +282,14 @@ app.post('/api/transactions', (req, res) => {
   const periodeBulan = req.body?.periodeBulan ? sanitizeNum(req.body.periodeBulan) : null;
   const periodeTahun = req.body?.periodeTahun ? sanitizeNum(req.body.periodeTahun) : null;
   const kasLocationId = sanitize(req.body?.kasLocationId);
+  const transferId = sanitize(req.body?.transferId);
+  const transferToKasLocationId = sanitize(req.body?.transferToKasLocationId);
 
   if (!date || !categoryId) return res.status(400).json({ error: 'Tanggal dan kategori wajib diisi.' });
   if (!['Pemasukan', 'Pengeluaran'].includes(type)) return res.status(400).json({ error: 'Tipe transaksi tidak valid.' });
   if (nominal <= 0) return res.status(400).json({ error: 'Nominal harus lebih dari 0.' });
 
-  db.prepare('INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId);
+  db.prepare('INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId);
   res.json({ success: true, id });
 });
 

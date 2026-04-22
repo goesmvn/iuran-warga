@@ -75,6 +75,8 @@ const initDB = () => {
       periodeBulan INTEGER,
       periodeTahun INTEGER,
       kasLocationId TEXT,
+      transferId TEXT,
+      transferToKasLocationId TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(categoryId) REFERENCES categories(id),
       FOREIGN KEY(residentId) REFERENCES warga(id),
@@ -132,6 +134,16 @@ try {
   db.exec(`ALTER TABLE categories ADD COLUMN showInPayment INTEGER DEFAULT 1`);
 } catch (_) {
   // Column already exists — silently ignore
+}
+try {
+  db.exec(`ALTER TABLE transactions ADD COLUMN transferId TEXT`);
+} catch (_) {
+  // Column already exists
+}
+try {
+  db.exec(`ALTER TABLE transactions ADD COLUMN transferToKasLocationId TEXT`);
+} catch (_) {
+  // Column already exists
 }
 
 export default db;
