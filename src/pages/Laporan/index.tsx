@@ -199,9 +199,8 @@ export default function Laporan() {
 
       const masuk = monthTxs.filter(t => t.type === 'Pemasukan' && t.categoryId !== 'cat-saldo-awal' && t.categoryId !== 'cat-transfer').reduce((s, t) => s + t.nominal, 0);
       const keluar = monthTxs.filter(t => t.type === 'Pengeluaran' && t.categoryId !== 'cat-transfer').reduce((s, t) => s + t.nominal, 0);
-      const saldoAwalInMonth = monthTxs.filter(t => t.categoryId === 'cat-saldo-awal').reduce((s, t) => s + t.nominal, 0);
 
-      const saldoAwalBulan = saldoBerjalan + saldoAwalInMonth;
+      const saldoAwalBulan = saldoBerjalan;
       const saldoAkhirBulan = saldoAwalBulan + masuk - keluar;
       saldoBerjalan = saldoAkhirBulan;
 
