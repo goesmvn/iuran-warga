@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import type { KasLocation } from '../types';
 import { apiFetch } from '../utils/apiFetch';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export const DEFAULT_KAS_LOCATION_ID = 'loc-default'; // Matched with DB seed id
 
 export function useKasLocation() {
     const [locations, setLocations] = useState<KasLocation[]>([]);
+    const { alert: customAlert } = useConfirm();
 
     useEffect(() => {
         apiFetch('/api/kas-locations')
@@ -36,7 +38,7 @@ export function useKasLocation() {
 
     const deleteLocation = async (id: string) => {
         if (id === DEFAULT_KAS_LOCATION_ID) {
-            alert('Lokasi Kas default tidak bisa dihapus.');
+            await customAlert('Aksi Dilarang', 'Lokasi Kas default tidak bisa dihapus.', 'warning');
             return;
         }
         const prevLocations = [...locations];
@@ -45,11 +47,11 @@ export function useKasLocation() {
             const res = await apiFetch(`/api/kas-locations/${id}`, { method: 'DELETE' });
             if (!res.ok) {
                 const data = await res.json();
-                alert(data.error || 'Gagal menghapus lokasi kas.');
+                await customAlert('Hapus Lokasi Kas Gagal', data.error || 'Gagal menghapus lokasi kas.', 'error');
                 setLocations(prevLocations);
             }
         } catch {
-            alert('Gagal menghapus lokasi kas. Periksa koneksi Anda.');
+            await customAlert('Koneksi Gagal', 'Gagal menghapus lokasi kas. Periksa koneksi Anda.', 'error');
             setLocations(prevLocations);
         }
     };

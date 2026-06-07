@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import type { Resident } from '../types';
 import { DEFAULT_WARGA } from '../utils/constants';
 import { apiFetch } from '../utils/apiFetch';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export function useWarga() {
     const [warga, setWarga] = useState<Resident[]>([]);
+    const { alert: customAlert } = useConfirm();
 
     const fetchWarga = async () => {
         try {
@@ -87,7 +89,7 @@ export function useWarga() {
             const res = await apiFetch(`/api/warga/${id}`, { method: 'DELETE' });
             if (!res.ok) {
                 const data = await res.json();
-                alert(data.error || 'Gagal menghapus warga.');
+                await customAlert('Hapus Warga Gagal', data.error || 'Gagal menghapus warga.', 'error');
                 if (targetWarga) {
                     setWarga(prev => [...prev, targetWarga]);
                 } else {

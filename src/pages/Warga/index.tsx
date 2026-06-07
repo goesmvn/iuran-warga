@@ -5,9 +5,11 @@ import Papa from "papaparse";
 
 import type { Resident } from "../../types";
 import { PrintKartuModal } from "../../components/PrintKartuModal";
+import { useConfirm } from "../../contexts/ConfirmContext";
 
 export default function Warga() {
   const { warga, addWarga, updateWarga, deleteWarga, importWarga } = useWarga();
+  const { confirm, alert: customAlert } = useConfirm();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [printWarga, setPrintWarga] = useState<Resident | null>(null);
@@ -109,11 +111,11 @@ export default function Warga() {
         );
         importWarga(parsedWarga);
         if (fileInputRef.current) fileInputRef.current.value = "";
-        alert(`Berhasil mengimpor ${parsedWarga.length} data warga!`);
+        customAlert('Impor Sukses', `Berhasil mengimpor ${parsedWarga.length} data warga!`, 'success');
       },
       error: (error) => {
         console.error("Error parsing CSV:", error);
-        alert("Gagal membaca file CSV. Pastikan format sudah benar.");
+        customAlert('Impor Gagal', "Gagal membaca file CSV. Pastikan format sudah benar.", 'error');
       },
     });
   };
@@ -150,7 +152,7 @@ export default function Warga() {
               placeholder="Cari nama atau blok..." 
               value={searchQuery}
               onChange={handleSearchChange}
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white"
             />
           </div>
           
@@ -246,8 +248,13 @@ export default function Warga() {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => {
-                        if(window.confirm('Yakin ingin menghapus warga ini? (Data transaksi yang terikat mungkin akan kehilangan referensi)')) {
+                      onClick={async () => {
+                        const confirmed = await confirm(
+                          'Hapus Data Warga',
+                          'Yakin ingin menghapus warga ini? (Data transaksi yang terikat mungkin akan kehilangan referensi)',
+                          'danger'
+                        );
+                        if (confirmed) {
                           deleteWarga(w.id);
                         }
                       }}
@@ -314,7 +321,7 @@ export default function Warga() {
             className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm"
             onClick={() => setIsModalOpen(false)}
           ></div>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden relative z-10">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden relative z-10">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-bold text-lg text-gray-900">
                 {editingId ? "Edit Data Warga" : "Registrasi Warga Baru"}

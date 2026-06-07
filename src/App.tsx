@@ -32,6 +32,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 import Dashboard from './pages/Dashboard';
 import Warga from './pages/Warga';
 import Kas from './pages/Kas';
+import Pengeluaran from './pages/Pengeluaran';
 import Kategori from './pages/Kategori';
 import BuatIuranWizard from './pages/Kategori/BuatIuranWizard';
 import Laporan from './pages/Laporan';
@@ -40,6 +41,7 @@ import Pengelola from './pages/Pengelola';
 import Pembayaran from './pages/Pembayaran';
 import LokasiKas from './pages/LokasiKas';
 import Transfer from './pages/Transfer';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -73,6 +75,7 @@ function AppRoutes() {
       <Route path="/warga" element={<Warga />} />
       <Route path="/pembayaran" element={<Pembayaran />} />
       <Route path="/kas" element={<Kas />} />
+      <Route path="/pengeluaran" element={<Pengeluaran />} />
       <Route path="/kategori" element={<Kategori />} />
       <Route path="/kategori/baru" element={<BuatIuranWizard />} />
       <Route path="/laporan" element={<Laporan />} />
@@ -86,23 +89,25 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <ErrorBoundary>
-          <Routes>
-            {/* Public Route */}
-            <Route path="/login" element={<Login />} />
-            
-            {/* Protected Routes defined via wildcard */}
-            <Route path="/*" element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <AppRoutes />
-                </DashboardLayout>
-              </ProtectedRoute>
-            } />
-          </Routes>
-        </ErrorBoundary>
-      </BrowserRouter>
+      <ConfirmProvider>
+        <BrowserRouter>
+          <ErrorBoundary>
+            <Routes>
+              {/* Public Route */}
+              <Route path="/login" element={<Login />} />
+              
+              {/* Protected Routes defined via wildcard */}
+              <Route path="/*" element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <AppRoutes />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              } />
+            </Routes>
+          </ErrorBoundary>
+        </BrowserRouter>
+      </ConfirmProvider>
     </AuthProvider>
   );
 }

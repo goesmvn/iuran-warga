@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, CreditCard, PieChart, Settings, X, Shield, LogOut, Landmark, Receipt, ArrowRightLeft } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, PieChart, Settings, X, Shield, LogOut, Landmark, Receipt, ArrowRightLeft, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -41,6 +41,7 @@ const menuGroups = [
         title: 'Keuangan',
         items: [
             { icon: CreditCard, label: 'Arus Kas & Buku Besar', path: '/kas' },
+            { icon: Minus, label: 'Catat Pengeluaran/Lain', path: '/pengeluaran' },
             { icon: ArrowRightLeft, label: 'Transfer Antar Kas', path: '/transfer' },
             { icon: PieChart, label: 'Laporan Keuangan', path: '/laporan' },
         ]

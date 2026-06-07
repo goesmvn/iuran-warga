@@ -15,12 +15,14 @@ import {
 } from "lucide-react";
 import type { Transaction } from "../../types";
 import { ReceiptModal, type ReceiptData } from "../../components/ReceiptModal";
+import { useConfirm } from "../../contexts/ConfirmContext";
 
 export default function Pembayaran() {
   const { transactions, addTransaction } = useTransaksi();
   const { warga } = useWarga();
   const { categories } = useCategory();
   const { locations } = useKasLocation();
+  const { alert: customAlert } = useConfirm();
 
   // Form State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -201,17 +203,17 @@ export default function Pembayaran() {
     const catIds = Object.keys(selectedCategories);
 
     if (!residentId || catIds.length === 0 || !kasLocationId) {
-      alert("Mohon lengkapi data Warga dan minimal pilih 1 kategori pemasukan.");
+      customAlert("Lengkapi Data", "Mohon lengkapi data Warga dan minimal pilih 1 kategori pemasukan.", "warning");
       return;
     }
 
     if (hasPeriodic && selectedMonths.length === 0) {
-      alert("Pilih minimal 1 bulan pada tahun yang dituju untuk iuran bulanan.");
+      customAlert("Pilih Bulan", "Pilih minimal 1 bulan pada tahun yang dituju untuk iuran bulanan.", "warning");
       return;
     }
     
     if (grandTotal <= 0 && catIds.length > 0) {
-      alert("Total pembayaran tidak valid.");
+      customAlert("Total Salah", "Total pembayaran tidak valid.", "error");
       return;
     }
 
@@ -311,14 +313,14 @@ export default function Pembayaran() {
                   <label className="block text-sm font-bold text-gray-700 mb-1.5">Tanggal Diterima</label>
                   <div className="relative">
                     <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full pl-9 pr-4 h-[44px] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#f43f5e]/20 focus:border-[#f43f5e] bg-gray-50 text-gray-900 font-medium" />
+                    <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full pl-10 pr-4 h-[44px] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#f43f5e]/20 focus:border-[#f43f5e] bg-gray-50 text-gray-900 font-medium" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1.5">Masuk Ke Lokasi Kas</label>
                   <div className="relative">
                     <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    <select required value={kasLocationId} onChange={e => setKasLocationId(e.target.value)} className="w-full pl-9 pr-4 h-[44px] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#f43f5e]/20 focus:border-[#f43f5e] bg-gray-50 font-medium text-gray-900 appearance-none">
+                    <select required value={kasLocationId} onChange={e => setKasLocationId(e.target.value)} className="w-full pl-10 pr-4 h-[44px] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#f43f5e]/20 focus:border-[#f43f5e] bg-gray-50 font-medium text-gray-900 appearance-none">
                       {locations.map(loc => (
                         <option key={loc.id} value={loc.id}>{loc.name} {loc.type !== 'Tunai' ? `(${loc.type})` : ''}</option>
                       ))}
@@ -338,7 +340,7 @@ export default function Pembayaran() {
                 {!residentId ? (
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="text" placeholder="Ketik nama atau no rumah..." value={searchWarga} onChange={(e) => setSearchWarga(e.target.value)} className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#f43f5e]/30 focus:ring-2 focus:ring-[#f43f5e]/20 focus:border-[#f43f5e] shadow-sm text-gray-900" />
+                    <input type="text" placeholder="Ketik nama atau no rumah..." value={searchWarga} onChange={(e) => setSearchWarga(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#f43f5e]/30 focus:ring-2 focus:ring-[#f43f5e]/20 focus:border-[#f43f5e] shadow-sm text-gray-900" />
                     
                     {searchWarga.length > 0 && (
                       <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-100 shadow-xl rounded-xl overflow-hidden divide-y">

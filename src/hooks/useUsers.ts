@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import type { User } from '../types';
 import { apiFetch } from '../utils/apiFetch';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export function useUsers() {
     const [users, setUsers] = useState<User[]>([]);
+    const { alert: customAlert } = useConfirm();
 
     useEffect(() => {
         apiFetch('/api/users')
@@ -22,7 +24,7 @@ export function useUsers() {
                 body: JSON.stringify(payload) // Content-type is already added by apiFetch automatically
             });
             const data = await res.json();
-            if(!res.ok) alert(data.error);
+            if(!res.ok) await customAlert('Simpan Gagal', data.error || 'Gagal menambahkan pengelola.', 'error');
         } catch(e) {
             console.error(e);
         }

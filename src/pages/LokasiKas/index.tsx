@@ -3,10 +3,12 @@ import { useKasLocation, DEFAULT_KAS_LOCATION_ID } from '../../hooks/useKasLocat
 import { useAuth } from '../../contexts/AuthContext';
 import { Building, Banknote, Wallet, Trash2, Plus, X, Landmark, Database, Edit2 } from 'lucide-react';
 import type { KasLocation } from '../../types';
+import { useConfirm } from '../../contexts/ConfirmContext';
 
 export default function LokasiKas() {
   const { locations, addLocation, deleteLocation, updateLocation } = useKasLocation();
   const { user: currentUser } = useAuth();
+  const { confirm } = useConfirm();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
@@ -101,9 +103,10 @@ export default function LokasiKas() {
                 </button>
                 {loc.id !== DEFAULT_KAS_LOCATION_ID && (
                   <button
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if(confirm(`Yakin menghapus Lokasi Kas: ${loc.name}? Transaksi lama mungkin akan kehilangan referensi nama letaknya.`)) deleteLocation(loc.id);
+                      const confirmed = await confirm('Hapus Rekening/Kas', `Yakin menghapus Lokasi Kas: ${loc.name}? Transaksi lama mungkin akan kehilangan referensi nama letaknya.`, 'danger');
+                      if (confirmed) deleteLocation(loc.id);
                     }}
                     className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                     title="Hapus Lokasi"
@@ -132,7 +135,7 @@ export default function LokasiKas() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative z-10">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden relative z-10">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-bold text-lg text-gray-900">{editingLocationId ? "Edit Akun/Lokasi Kas" : "Tambah Akun/Lokasi Kas"}</h3>
               <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>

@@ -94,7 +94,7 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
         <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm print:hidden" onClick={onClose}></div>
 
         {/* Modal / Paper */}
-        <div className={`bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl relative z-10 flex flex-col print:shadow-none print:m-0 print:border-none print:rounded-none ${isThermal ? 'print:w-full print:max-w-full overflow-y-auto print:overflow-visible' : 'overflow-hidden print:w-[210mm] print:h-[297mm] print:max-w-none'}`}>
+        <div className={`bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] shadow-2xl relative z-10 flex flex-col print:shadow-none print:m-0 print:border-none print:rounded-none ${isThermal ? 'print:w-full print:max-w-full overflow-y-auto print:overflow-visible' : 'overflow-hidden print:w-[210mm] print:h-[297mm] print:max-w-none'}`}>
          
          {/* Web Header */}
          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 print:hidden hidden sm:flex">

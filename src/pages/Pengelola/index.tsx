@@ -4,12 +4,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
 import { Shield, Trash2, Plus, X, Settings, Download, Upload, Database, MapPin, Users, CalendarDays, Landmark } from 'lucide-react';
 import { apiFetch } from '../../utils/apiFetch';
+import { useConfirm } from '../../contexts/ConfirmContext';
 
 type SettingsTab = 'pengguna' | 'pengaturan' | 'identitas' | 'backup';
 
 export default function Pengelola() {
   const { users, addUser, deleteUser } = useUsers();
   const { user: currentUser } = useAuth();
+  const { confirm, alert: customAlert } = useConfirm();
   
   const [activeTab, setActiveTab] = useState<SettingsTab>('pengguna');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,7 +52,7 @@ export default function Pengelola() {
         const res = await apiFetch('/api/backup');
         if (!res.ok) {
             const data = await res.json();
-            alert(data.error || 'Gagal mengunduh backup');
+            await customAlert('Unduh Backup Gagal', data.error || 'Gagal mengunduh backup', 'error');
             return;
         }
         const blob = await res.blob();
@@ -64,7 +66,7 @@ export default function Pengelola() {
         a.remove();
     } catch (e) {
         console.error(e);
-        alert('Terjadi kesalahan saat mengunduh backup');
+        await customAlert('Unduh Backup Gagal', 'Terjadi kesalahan saat mengunduh backup', 'error');
     }
   };
 
@@ -73,12 +75,17 @@ export default function Pengelola() {
     if (!file) return;
 
     if (!file.name.endsWith('.sqlite')) {
-      alert('Hanya file berformat .sqlite yang diizinkan!');
+      await customAlert('Format File Salah', 'Hanya file berformat .sqlite yang diizinkan!', 'warning');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
-    if (!confirm('Peringatan: Me-restore database akan menimpa seluruh data yang ada saat ini. Yakin ingin melanjutkan?')) {
+    const confirmed = await confirm(
+      'Restore Database',
+      'Peringatan: Me-restore database akan menimpa seluruh data yang ada saat ini. Yakin ingin melanjutkan?',
+      'danger'
+    );
+    if (!confirmed) {
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
     }
@@ -94,16 +101,16 @@ export default function Pengelola() {
       const data = await res.json();
       
       if (res.ok) {
-        alert('Restore berhasil! Sistem akan dimuat ulang...');
+        await customAlert('Restore Berhasil', 'Restore berhasil! Sistem akan dimuat ulang...', 'success');
         setTimeout(() => {
           window.location.reload();
         }, 2000);
       } else {
-        alert(data.error || 'Terjadi kesalahan saat restore.');
+        await customAlert('Restore Gagal', data.error || 'Terjadi kesalahan saat restore.', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Gagal me-restore data karena kesalahan sistem.');
+      await customAlert('Restore Gagal', 'Gagal me-restore data karena kesalahan sistem.', 'error');
     } finally {
       setIsRestoring(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -140,7 +147,7 @@ export default function Pengelola() {
     if (localRekeningTujuan !== rekeningTujuan) { await updateSetting('rekening_tujuan', localRekeningTujuan); changed = true; }
     
     setIsUpdatingSetting(false);
-    if (changed) alert("Pengaturan berhasil disimpan.");
+    if (changed) await customAlert("Pengaturan Disimpan", "Pengaturan berhasil disimpan.", "success");
   };
 
   if (currentUser?.role !== 'Admin') {
@@ -237,8 +244,9 @@ export default function Pengelola() {
                     <td className="px-6 py-4 text-right">
                       {currentUser.id !== u.id && u.username !== 'admin' && (
                         <button
-                          onClick={() => {
-                            if(confirm('Yakin menghapus hak akses pengguna ini?')) deleteUser(u.id);
+                          onClick={async () => {
+                            const confirmed = await confirm('Hapus Hak Akses', 'Yakin menghapus hak akses pengguna ini?', 'danger');
+                            if (confirmed) deleteUser(u.id);
                           }}
                           className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                           title="Hapus Izin"
@@ -498,7 +506,7 @@ export default function Pengelola() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative z-10">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden relative z-10">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-bold text-lg text-gray-900">Tambah Akses Pengelola</h3>
               <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>

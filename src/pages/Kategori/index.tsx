@@ -4,11 +4,13 @@ import { useCategory } from "../../hooks/useCategory";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { Plus, Edit2, X, Trash2, CheckCircle2 } from "lucide-react";
 import type { Category } from "../../types";
+import { useConfirm } from "../../contexts/ConfirmContext";
 
 export default function DaftarIuran() {
   const { categories, deleteCategory, updateCategory } = useCategory();
   const { transactions } = useTransaksi();
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const { confirm, alert: customAlert } = useConfirm();
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,14 +200,17 @@ export default function DaftarIuran() {
                             type="button"
                             className="p-1.5 text-gray-300 cursor-not-allowed"
                             title="Tidak bisa dihapus karena sudah dipakai"
-                            onClick={() => alert("Kategori ini tidak dapat dihapus karena sudah digunakan dalam " + transactions.filter(t => t.categoryId === cat.id).length + " pencatatan transaksi.")}
+                            onClick={async () => {
+                              await customAlert('Kategori Masih Digunakan', "Kategori ini tidak dapat dihapus karena sudah digunakan dalam " + transactions.filter(t => t.categoryId === cat.id).length + " pencatatan transaksi.", 'warning');
+                            }}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         ) : (
                           <button
-                            onClick={() => {
-                              if(window.confirm('Yakin menghapus kategori iuran ini secara permanen?')) {
+                            onClick={async () => {
+                              const confirmed = await confirm('Hapus Kategori', 'Yakin menghapus kategori iuran ini secara permanen?', 'danger');
+                              if (confirmed) {
                                 deleteCategory(cat.id);
                               }
                             }}
@@ -236,7 +241,7 @@ export default function DaftarIuran() {
       {editingCategory && (
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
           <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={() => setEditingCategory(null)}></div>
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl overflow-hidden relative z-10">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden relative z-10">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-bold text-lg text-gray-900">Edit Kategori Iuran</h3>
               <button type="button" onClick={() => setEditingCategory(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>

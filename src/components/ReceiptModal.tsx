@@ -51,7 +51,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
       ></div>
 
       {/* Modal Container */}
-      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] print:shadow-none print:w-full print:max-w-full print:m-0 print:border-none print:rounded-none">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh] print:shadow-none print:w-full print:max-w-full print:m-0 print:border-none print:rounded-none">
         
         {/* Header Actions (No Print) */}
         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 print:hidden hidden sm:flex">

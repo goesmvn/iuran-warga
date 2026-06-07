@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import type { Category } from '../types';
 import { apiFetch } from '../utils/apiFetch';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export function useCategory() {
     const [categories, setCategories] = useState<Category[]>([]);
+    const { alert: customAlert } = useConfirm();
 
     useEffect(() => {
         apiFetch('/api/categories')
@@ -39,11 +41,11 @@ export function useCategory() {
             const res = await apiFetch(`/api/categories/${id}`, { method: 'DELETE' });
             if (!res.ok) {
                 const data = await res.json();
-                alert(data.error || 'Gagal menghapus kategori.');
+                await customAlert('Hapus Kategori Gagal', data.error || 'Gagal menghapus kategori.', 'error');
                 setCategories(prevCategories);
             }
         } catch {
-            alert('Gagal menghapus kategori. Periksa koneksi Anda.');
+            await customAlert('Koneksi Gagal', 'Gagal menghapus kategori. Periksa koneksi Anda.', 'error');
             setCategories(prevCategories);
         }
     };

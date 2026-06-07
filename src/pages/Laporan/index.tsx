@@ -11,16 +11,19 @@ import {
   CheckCircle2,
   Printer,
   ArrowDownUp,
-  Landmark
+  Landmark,
+  Search
 } from "lucide-react";
 import Papa from "papaparse";
+import { useConfirm } from "../../contexts/ConfirmContext";
 
 export default function Laporan() {
-  const { transactions } = useTransaksi();
+  const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransaksi();
   const { warga } = useWarga();
   const { categories } = useCategory();
   const { settings } = useSettings();
   const { locations: kasLocations } = useKasLocation();
+  const { confirm, alert: customAlert } = useConfirm();
 
   const namaKetua = settings['nama_ketua'] || '.........................';
   const namaBendahara = settings['nama_bendahara'] || '.........................';
@@ -28,14 +31,79 @@ export default function Laporan() {
   const namaDesa = settings['nama_desa'] || '';
   const alamatOrg = settings['alamat'] || '';
 
-  const [activeTab, setActiveTab] = useState<"Bulanan" | "Tunggakan" | "Rekapitulasi" | "Tahunan" | "ArusKas">("Tahunan");
+  const [activeTab, setActiveTab] = useState<"Bulanan" | "Tunggakan" | "Rekapitulasi" | "Tahunan" | "ArusKas" | "Pertanggal">("Tahunan");
 
   // Filter States
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
   const [filterYearTahunan, setFilterYearTahunan] = useState(new Date().getFullYear());
+  const [filterStartDate, setFilterStartDate] = useState(() => {
+    // Default to today
+    return new Date().toISOString().split("T")[0];
+  });
+  const [filterEndDate, setFilterEndDate] = useState(() => {
+    // Default to today
+    return new Date().toISOString().split("T")[0];
+  });
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Correction Modal States
+  const [correctionResident, setCorrectionResident] = useState<any | null>(null);
+  const [editingTx, setEditingTx] = useState<any | null>(null);
+  
+  // Correction Form States
+  const [corrDate, setCorrDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [corrMonth, setCorrMonth] = useState(1);
+  const [corrCategoryId, setCorrCategoryId] = useState("");
+  const [corrNominal, setCorrNominal] = useState("");
+  const [corrLocationId, setCorrLocationId] = useState("");
+  const [corrDescription, setCorrDescription] = useState("");
 
   const yearOptions = Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 2 + i);
+
+  // === LAPORAN PERTANGGAL LOGIC ===
+  const pertanggalTransactions = useMemo(() => {
+    return transactions
+      .filter((t) => {
+        const tDateOnly = t.date.split("T")[0];
+        const inDateRange = tDateOnly >= filterStartDate && tDateOnly <= filterEndDate;
+        if (!inDateRange) return false;
+
+        if (searchQuery.trim() !== "") {
+          const query = searchQuery.toLowerCase();
+          const categoryName = categories.find((c) => c.id === t.categoryId)?.name || "";
+          const locationName = kasLocations.find((l) => l.id === t.kasLocationId)?.name || "";
+          const w = t.type === "Pemasukan" ? warga.find((w) => w.id === t.residentId) : null;
+          const residentName = w ? w.namaKepalaKeluarga : "";
+          const residentHouse = w ? w.nomorRumah : "";
+          const desc = t.description || "";
+
+          return (
+            residentName.toLowerCase().includes(query) ||
+            residentHouse.toLowerCase().includes(query) ||
+            categoryName.toLowerCase().includes(query) ||
+            locationName.toLowerCase().includes(query) ||
+            desc.toLowerCase().includes(query)
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [transactions, filterStartDate, filterEndDate, searchQuery, warga, categories, kasLocations]);
+
+  const totalPemasukanPertanggal = useMemo(() => {
+    return pertanggalTransactions
+      .filter((t) => t.type === "Pemasukan" && t.categoryId !== "cat-transfer")
+      .reduce((sum, t) => sum + t.nominal, 0);
+  }, [pertanggalTransactions]);
+
+  const totalPengeluaranPertanggal = useMemo(() => {
+    return pertanggalTransactions
+      .filter((t) => t.type === "Pengeluaran" && t.categoryId !== "cat-transfer")
+      .reduce((sum, t) => sum + t.nominal, 0);
+  }, [pertanggalTransactions]);
+
+  const selisihPertanggal = totalPemasukanPertanggal - totalPengeluaranPertanggal;
 
   // === LAPORAN BULANAN LOGIC ===
   const monthlyTransactions = useMemo(() => {
@@ -99,7 +167,7 @@ export default function Laporan() {
         .map((t) => t.residentId),
     );
 
-    return warga
+    let list = warga
       .filter((w) => w.status === "Aktif")
       .filter((w) => !paidResidentsForPeriod.has(w.id))
       .map((w) => {
@@ -118,16 +186,121 @@ export default function Laporan() {
           ...w,
           missedMonthsCount: Math.max(0, missedMonthsCount),
         };
-      })
-      .sort((a, b) => b.missedMonthsCount - a.missedMonthsCount);
-  }, [transactions, warga, filterMonth, filterYear]);
+      });
+
+    if (searchQuery.trim() !== "") {
+      const query = searchQuery.toLowerCase();
+      list = list.filter((w) =>
+        w.namaKepalaKeluarga.toLowerCase().includes(query) ||
+        w.nomorRumah.toLowerCase().includes(query)
+      );
+    }
+
+    return list.sort((a, b) => b.missedMonthsCount - a.missedMonthsCount);
+  }, [transactions, warga, filterMonth, filterYear, searchQuery]);
+
+  // === KOREKSI PEMBAYARAN DI REKAP WARGA ===
+  const residentTransactions = useMemo(() => {
+    if (!correctionResident) return [];
+    return transactions.filter(
+      (t) =>
+        t.residentId === correctionResident.id &&
+        t.type === "Pemasukan" &&
+        t.periodeTahun === filterYear
+    );
+  }, [transactions, correctionResident, filterYear]);
+
+  const handleOpenCorrection = (w: any) => {
+    setCorrectionResident(w);
+    setEditingTx(null);
+    
+    // Set defaults
+    setCorrDate(new Date().toISOString().split("T")[0]);
+    setCorrMonth(1);
+    const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
+    setCorrCategoryId(defaultCat?.id || "");
+    setCorrNominal(defaultCat?.defaultNominal?.toString() || "");
+    setCorrLocationId(kasLocations[0]?.id || "default");
+    setCorrDescription("");
+  };
+
+  const resetCorrForm = () => {
+    setEditingTx(null);
+    setCorrDate(new Date().toISOString().split("T")[0]);
+    setCorrMonth(1);
+    const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
+    setCorrCategoryId(defaultCat?.id || "");
+    setCorrNominal(defaultCat?.defaultNominal?.toString() || "");
+    setCorrLocationId(kasLocations[0]?.id || "default");
+    setCorrDescription("");
+  };
+
+  const handleSelectEditTx = (tx: any) => {
+    setEditingTx(tx);
+    setCorrDate(tx.date.split("T")[0]);
+    setCorrMonth(tx.periodeBulan || 1);
+    setCorrCategoryId(tx.categoryId);
+    setCorrNominal(tx.nominal.toString());
+    setCorrLocationId(tx.kasLocationId || kasLocations[0]?.id || "default");
+    setCorrDescription(tx.description || "");
+  };
+
+  const handleSaveCorrection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!correctionResident || !corrCategoryId || !corrNominal) return;
+
+    if (editingTx) {
+      updateTransaction(editingTx.id, {
+        date: new Date(corrDate).toISOString(),
+        categoryId: corrCategoryId,
+        nominal: Number(corrNominal),
+        description: corrDescription,
+        kasLocationId: corrLocationId,
+        periodeBulan: corrMonth,
+        periodeTahun: filterYear,
+      });
+    } else {
+      addTransaction({
+        date: new Date(corrDate).toISOString(),
+        categoryId: corrCategoryId,
+        type: "Pemasukan",
+        nominal: Number(corrNominal),
+        description: corrDescription,
+        kasLocationId: corrLocationId,
+        residentId: correctionResident.id,
+        periodeBulan: corrMonth,
+        periodeTahun: filterYear,
+      });
+    }
+    resetCorrForm();
+  };
+
+  const handleCategoryChangeCorr = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const cid = e.target.value;
+    setCorrCategoryId(cid);
+    const cat = categories.find((c) => c.id === cid);
+    if (cat?.defaultNominal) {
+      setCorrNominal(cat.defaultNominal.toString());
+    } else {
+      setCorrNominal("");
+    }
+  };
 
   // === REKAPITULASI MATRIKS LOGIC ===
   const bulananCids = useMemo(() => categories.filter(c => c.name.toLowerCase().includes("bulanan") || c.periode === "Bulanan").map(c => c.id), [categories]);
   const tahunanCids = useMemo(() => categories.filter(c => c.name.toLowerCase().includes("tahunan") || c.periode === "Tahunan").map(c => c.id), [categories]);
 
   const rekapitulasiList = useMemo(() => {
-    return warga
+    let filteredWarga = warga;
+    if (activeTab === "Rekapitulasi" && searchQuery.trim() !== "") {
+      const query = searchQuery.toLowerCase();
+      filteredWarga = warga.filter(w => 
+        w.namaKepalaKeluarga.toLowerCase().includes(query) ||
+        w.nomorRumah.toLowerCase().includes(query)
+      );
+    }
+
+    return filteredWarga
       .sort((a, b) => {
         const numA = parseInt(a.nomorRumah.replace(/\D/g, '')) || 0;
         const numB = parseInt(b.nomorRumah.replace(/\D/g, '')) || 0;
@@ -135,19 +308,32 @@ export default function Laporan() {
       })
       .map(w => {
         const wTx = transactions.filter(t => t.residentId === w.id && t.type === "Pemasukan" && t.periodeTahun === filterYear);
-        const paidSet = new Set<number>();
+        const paidMonthsMap = new Map<number, { date: string; nominal: number; categoryName: string }>();
         wTx.forEach(t => {
-          if (t.periodeBulan && bulananCids.includes(t.categoryId)) paidSet.add(t.periodeBulan);
+          const categoryName = categories.find(c => c.id === t.categoryId)?.name || "Iuran";
+          if (t.periodeBulan && bulananCids.includes(t.categoryId)) {
+            paidMonthsMap.set(t.periodeBulan, {
+              date: t.date,
+              nominal: t.nominal,
+              categoryName
+            });
+          }
           if (tahunanCids.includes(t.categoryId)) {
-            for (let i = 1; i <= 12; i++) paidSet.add(i);
+            for (let i = 1; i <= 12; i++) {
+              paidMonthsMap.set(i, {
+                date: t.date,
+                nominal: t.nominal,
+                categoryName
+              });
+            }
           }
         });
         return {
           ...w,
-          paidMonths: paidSet
+          paidMonthsMap
         };
       });
-  }, [warga, transactions, filterYear, bulananCids, tahunanCids]);
+  }, [warga, transactions, filterYear, bulananCids, tahunanCids, searchQuery, activeTab]);
 
   // === LAPORAN TAHUNAN LOGIC ===
   const yearCurrent = filterYearTahunan;
@@ -266,8 +452,27 @@ export default function Laporan() {
       }));
       const csv = Papa.unparse(data);
       downloadBlob(csv, `Daftar_Tunggakan_${filterMonth}_${filterYear}.csv`);
+    } else if (activeTab === "Pertanggal") {
+      const data = pertanggalTransactions.map((t) => {
+        const isPemasukan = t.type === "Pemasukan";
+        const w = isPemasukan ? warga.find((w) => w.id === t.residentId) : null;
+        return {
+          Tanggal: new Date(t.date).toLocaleDateString("id-ID"),
+          Tipe: t.type,
+          Kategori: categories.find((c) => c.id === t.categoryId)?.name || "-",
+          Nama: w ? w.namaKepalaKeluarga : (t.description || "-"),
+          "No Rumah": w ? w.nomorRumah : "-",
+          Periode: t.periodeBulan && t.periodeTahun 
+            ? `${new Date(2000, t.periodeBulan - 1).toLocaleString("id-ID", { month: "long" })} ${t.periodeTahun}`
+            : (t.periodeTahun ? `Tahun ${t.periodeTahun}` : "-"),
+          "Lokasi Kas": kasLocations.find((l) => l.id === t.kasLocationId)?.name || "-",
+          Nominal: t.nominal,
+        };
+      });
+      const csv = Papa.unparse(data);
+      downloadBlob(csv, `Laporan_Pertanggal_${filterStartDate}_sd_${filterEndDate}.csv`);
     } else {
-      alert("Gunakan tombol 'Print Laporan' atau Cetak (Ctrl+P) untuk laporan ini.");
+      customAlert("Cetak Laporan", "Gunakan tombol 'Print Laporan' atau Cetak (Ctrl+P) untuk laporan ini.", "info");
     }
   };
 
@@ -310,7 +515,7 @@ export default function Laporan() {
     </div>
   );
 
-  const canPrint = activeTab === "Tahunan" || activeTab === "ArusKas" || activeTab === "Bulanan" || activeTab === "Rekapitulasi" || activeTab === "Tunggakan";
+  const canPrint = activeTab === "Tahunan" || activeTab === "ArusKas" || activeTab === "Bulanan" || activeTab === "Rekapitulasi" || activeTab === "Tunggakan" || activeTab === "Pertanggal";
 
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto print:max-w-none print:w-full print:m-0">
@@ -327,13 +532,17 @@ export default function Laporan() {
           {([
             { id: "Tahunan", label: "Tahunan", active: "bg-brand-600 text-white shadow border border-brand-700" },
             { id: "Bulanan", label: "Bulanan", active: "bg-white text-gray-900 shadow border border-gray-200" },
+            { id: "Pertanggal", label: "Pertanggal", active: "bg-white text-emerald-700 shadow border border-emerald-200" },
             { id: "ArusKas", label: "Arus Kas", active: "bg-white text-gray-900 shadow border border-gray-200" },
             { id: "Rekapitulasi", label: "Rekap Warga", active: "bg-white text-blue-700 shadow border border-blue-200" },
             { id: "Tunggakan", label: "Tunggakan", active: "bg-white text-brand-700 shadow border border-brand-200" },
           ] as const).map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSearchQuery("");
+              }}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === tab.id ? tab.active : "text-gray-500 hover:text-gray-700"
                 }`}
             >
@@ -345,7 +554,79 @@ export default function Laporan() {
 
       {/* Filter Bar */}
       <div className="print:hidden bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-wrap items-center justify-between gap-4">
-        {activeTab === "Bulanan" || activeTab === "Tunggakan" ? (
+        {activeTab === "Pertanggal" ? (
+          <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+            <Filter className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-500">Mulai:</span>
+              <input
+                type="date"
+                value={filterStartDate}
+                onChange={(e) => setFilterStartDate(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-500">Sampai:</span>
+              <input
+                type="date"
+                value={filterEndDate}
+                onChange={(e) => setFilterEndDate(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2 relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Cari nama warga, blok, atau ket..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+        ) : activeTab === "Rekapitulasi" ? (
+          <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+            <Filter className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-500">Tahun Rekap:</span>
+              <select
+                value={filterYear}
+                onChange={(e) => setFilterYear(Number(e.target.value))}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none font-semibold text-gray-700"
+              >
+                {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Cari nama warga atau blok..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+        ) : activeTab === "Bulanan" ? (
           <div className="flex items-center gap-3">
             <Filter className="w-5 h-5 text-gray-400" />
             <select
@@ -370,6 +651,51 @@ export default function Laporan() {
               className="w-24 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
             />
           </div>
+        ) : activeTab === "Tunggakan" ? (
+          <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+            <Filter className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-2">
+              <select
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(Number(e.target.value))}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
+              >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                  <option key={m} value={m}>
+                    {new Date(2000, m - 1).toLocaleString("id-ID", {
+                      month: "long",
+                    })}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min="2000"
+                max="2100"
+                value={filterYear}
+                onChange={(e) => setFilterYear(Number(e.target.value))}
+                className="w-24 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2 relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Cari nama warga atau blok..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="flex items-center gap-3">
             <Filter className="w-5 h-5 text-gray-400" />
@@ -386,7 +712,7 @@ export default function Laporan() {
         )}
 
         <div className="flex items-center gap-2">
-          {(activeTab === "Bulanan" || activeTab === "Tunggakan") && (
+          {(activeTab === "Bulanan" || activeTab === "Tunggakan" || activeTab === "Pertanggal") && (
             <button
               onClick={exportCSV}
               className="flex items-center gap-2 text-green-700 bg-green-50 hover:bg-green-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors border border-green-200"
@@ -502,6 +828,116 @@ export default function Laporan() {
               <p className="font-bold">Ketua</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* PERTANGGAL VIEW */}
+      {activeTab === "Pertanggal" && (
+        <div className="space-y-6 print:space-y-4">
+          <PrintHeader
+            title="Laporan Keuangan Pertanggal"
+            subtitle={`Periode: ${new Date(filterStartDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s.d. ${new Date(filterEndDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`}
+          />
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 print:grid-cols-3 print:gap-4">
+            <div className="bg-green-50 border border-green-200 p-6 rounded-2xl shadow-sm print:p-4 print:rounded-lg">
+              <p className="text-green-800 text-sm font-medium mb-1">Total Pemasukan</p>
+              <h4 className="text-2xl font-bold text-green-700 print:text-lg">
+                Rp {totalPemasukanPertanggal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h4>
+            </div>
+            <div className="bg-red-50 border border-red-200 p-6 rounded-2xl shadow-sm print:p-4 print:rounded-lg">
+              <p className="text-gray-500 text-sm font-medium mb-1">Total Pengeluaran</p>
+              <h4 className="text-2xl font-bold text-red-600 print:text-lg">
+                Rp {totalPengeluaranPertanggal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h4>
+            </div>
+            <div className={`p-6 rounded-2xl border shadow-sm print:p-4 print:rounded-lg ${selisihPertanggal >= 0 ? "bg-blue-50 border-blue-100" : "bg-orange-50 border-orange-100"}`}>
+              <p className={`text-sm font-medium mb-1 ${selisihPertanggal >= 0 ? "text-blue-800" : "text-orange-800"}`}>
+                Surplus / Defisit Bersih
+              </p>
+              <h4 className={`text-2xl font-bold print:text-lg ${selisihPertanggal >= 0 ? "text-blue-700" : "text-orange-700"}`}>
+                {selisihPertanggal >= 0 ? "+" : "-"} Rp{" "}
+                {Math.abs(selisihPertanggal).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h4>
+            </div>
+          </div>
+
+          {/* Transactions Table */}
+          <div className="bg-white rounded-2xl print:rounded-none shadow-sm print:shadow-none border border-gray-200 print:border-none overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 print:hidden flex items-center justify-between">
+              <h3 className="font-bold text-gray-800">
+                Detail Transaksi Keuangan ({pertanggalTransactions.length} Transaksi)
+              </h3>
+            </div>
+            <div className="overflow-x-auto print:overflow-visible">
+              <table className="w-full text-left text-sm whitespace-nowrap border-collapse animate-fade-in">
+                <thead className="text-gray-750 font-bold bg-[#f3f4f6] print:bg-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 print:py-2 border border-gray-200 print:border-gray-300">Tanggal</th>
+                    <th className="px-4 py-3 print:py-2 border border-gray-200 print:border-gray-300">Nama / Keterangan</th>
+                    <th className="px-4 py-3 print:py-2 border border-gray-200 print:border-gray-300">No. Rumah</th>
+                    <th className="px-4 py-3 print:py-2 border border-gray-200 print:border-gray-300">Kategori</th>
+                    <th className="px-4 py-3 print:py-2 border border-gray-200 print:border-gray-300">Periode</th>
+                    <th className="px-4 py-3 print:py-2 border border-gray-200 print:border-gray-300">Lokasi Kas</th>
+                    <th className="px-4 py-3 print:py-2 border border-gray-200 print:border-gray-300 text-right">Nominal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 print:divide-gray-300">
+                  {pertanggalTransactions.map((t) => {
+                    const isPemasukan = t.type === "Pemasukan";
+                    const w = isPemasukan ? warga.find((w) => w.id === t.residentId) : null;
+                    const categoryName = categories.find((c) => c.id === t.categoryId)?.name || "-";
+                    const locationName = kasLocations.find((l) => l.id === t.kasLocationId)?.name || "-";
+                    
+                    // Format period
+                    let periodText = "-";
+                    if (t.periodeBulan && t.periodeTahun) {
+                      const monthName = new Date(2000, t.periodeBulan - 1).toLocaleString("id-ID", { month: "long" });
+                      periodText = `${monthName} ${t.periodeTahun}`;
+                    } else if (t.periodeTahun) {
+                      periodText = `Tahun ${t.periodeTahun}`;
+                    }
+
+                    return (
+                      <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3 print:py-2 border border-gray-100 print:border-gray-200 text-gray-600">
+                          {new Date(t.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                        </td>
+                        <td className="px-4 py-3 print:py-2 border border-gray-100 print:border-gray-200 font-medium text-gray-800">
+                          {w ? w.namaKepalaKeluarga : (t.description || "-")}
+                        </td>
+                        <td className="px-4 py-3 print:py-2 border border-gray-100 print:border-gray-200 text-gray-600">
+                          {w ? w.nomorRumah : "-"}
+                        </td>
+                        <td className="px-4 py-3 print:py-2 border border-gray-100 print:border-gray-200 text-gray-600">
+                          {categoryName}
+                        </td>
+                        <td className="px-4 py-3 print:py-2 border border-gray-100 print:border-gray-200 text-gray-600">
+                          {periodText}
+                        </td>
+                        <td className="px-4 py-3 print:py-2 border border-gray-100 print:border-gray-200 text-gray-600">
+                          {locationName}
+                        </td>
+                        <td className={`px-4 py-3 print:py-2 border border-gray-100 print:border-gray-200 text-right font-bold ${isPemasukan ? "text-green-600" : "text-red-600"}`}>
+                          {isPemasukan ? "+" : "-"} Rp {t.nominal.toLocaleString("id-ID")}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {pertanggalTransactions.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                        Tidak ada transaksi dalam rentang tanggal ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <PrintFooter />
         </div>
       )}
 
@@ -756,11 +1192,8 @@ export default function Laporan() {
                   Rekapitulasi Matriks Iuran Warga Tahun {filterYear}
                 </h3>
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-medium text-gray-500">Pilih Tahun:</label>
-                <select value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))} className="px-3 py-1.5 rounded-lg border border-gray-200 font-bold focus:ring-1 focus:ring-blue-500 shadow-sm outline-none">
-                  {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
+              <div className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200">
+                Tahun Rekap: {filterYear}
               </div>
             </div>
 
@@ -775,6 +1208,9 @@ export default function Laporan() {
                         {m}
                       </th>
                     ))}
+                    <th className="px-4 py-3 border-r border-gray-200 text-center uppercase tracking-widest text-gray-500 font-bold print:hidden">
+                      Aksi
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -788,17 +1224,37 @@ export default function Laporan() {
                         {w.status === 'Pindah' && <span className="ml-2 text-[9px] font-normal italic text-red-500">(Pindah)</span>}
                       </td>
                       {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
-                        const isHadir = w.paidMonths.has(m);
+                        const txInfo = w.paidMonthsMap?.get(m);
+                        const isHadir = !!txInfo;
+                        const formattedDate = txInfo ? new Date(txInfo.date).toLocaleDateString("id-ID", { day: 'numeric', month: 'short', year: 'numeric' }) : "";
+                        const tooltipText = txInfo 
+                          ? `Lunas: ${formattedDate}\nNominal: Rp ${txInfo.nominal.toLocaleString("id-ID")}\nKategori: ${txInfo.categoryName}` 
+                          : "Belum Bayar";
+                        
                         return (
                           <td key={m} className="px-2 py-2 border-r border-gray-100/50 text-center">
                             {isHadir ? (
-                              <span className="inline-flex w-5 h-5 items-center justify-center bg-green-100 text-green-700 rounded-sm font-bold text-xs ring-1 ring-green-200/50">✓</span>
+                              <span 
+                                title={tooltipText}
+                                className="cursor-help inline-flex w-5 h-5 items-center justify-center bg-green-100 text-green-700 rounded-sm font-bold text-xs ring-1 ring-green-200/50 hover:bg-green-200 transition-colors"
+                              >
+                                ✓
+                              </span>
                             ) : (
-                              <span className="text-gray-300">-</span>
+                              <span title="Belum Bayar" className="text-gray-300">-</span>
                             )}
                           </td>
                         )
                       })}
+                      <td className="px-2 py-2 border-r border-gray-100/50 text-center print:hidden">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCorrection(w)}
+                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded border border-blue-200 font-semibold text-[10px] uppercase transition-colors"
+                        >
+                          Koreksi
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -917,6 +1373,258 @@ export default function Laporan() {
             </div>
           </div>
           <PrintFooter />
+        </div>
+      )}
+
+      {/* Modal Koreksi Pembayaran Warga */}
+      {correctionResident && (
+        <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
+          <div
+            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+            onClick={() => setCorrectionResident(null)}
+          ></div>
+          <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden relative z-10 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-blue-50 border-blue-100 flex-shrink-0">
+              <div>
+                <h3 className="font-bold text-lg text-blue-900">
+                  Koreksi Pembayaran Iuran Warga
+                </h3>
+                <p className="text-sm text-blue-700">
+                  {correctionResident.namaKepalaKeluarga} (Blok {correctionResident.nomorRumah}) • Tahun {filterYear}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCorrectionResident(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content Body (Split screen) */}
+            <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
+              {/* Kolom Kiri: Riwayat Pembayaran */}
+              <div className="flex flex-col h-full min-h-0">
+                <h4 className="font-bold text-gray-800 mb-3 text-sm border-b pb-2 flex-shrink-0">
+                  Riwayat Pembayaran Terdaftar ({residentTransactions.length} Transaksi)
+                </h4>
+                <div className="overflow-y-auto flex-1 space-y-3 pr-2">
+                  {residentTransactions.map((tx) => {
+                    const monthName = tx.periodeBulan
+                      ? new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "long" })
+                      : "-";
+                    return (
+                      <div
+                        key={tx.id}
+                        className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 flex items-center justify-between shadow-sm transition-all"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                              {monthName}
+                            </span>
+                            <span className="text-xs text-gray-500 font-medium">
+                              {new Date(tx.date).toLocaleDateString("id-ID")}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {categories.find((c) => c.id === tx.categoryId)?.name || "-"} •{" "}
+                            {kasLocations.find((l) => l.id === tx.kasLocationId)?.name || "-"}
+                          </p>
+                          <p className="text-sm font-bold text-gray-900">
+                            Rp {tx.nominal.toLocaleString("id-ID")}
+                          </p>
+                          {tx.description && (
+                            <p className="text-[11px] text-gray-500 italic mt-0.5">
+                              "{tx.description}"
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectEditTx(tx)}
+                            className="p-2 bg-white hover:bg-blue-50 border border-gray-200 text-blue-600 rounded-lg transition-colors shadow-sm"
+                            title="Edit Pembayaran"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const confirmed = await confirm(
+                                'Hapus Catatan Pembayaran',
+                                'Hapus catatan pembayaran ini? Aksi ini akan seketika merubah data laporan rekap warga.',
+                                'danger'
+                              );
+                              if (confirmed) {
+                                deleteTransaction(tx.id);
+                                if (editingTx?.id === tx.id) {
+                                  resetCorrForm();
+                                }
+                              }
+                            }}
+                            className="p-2 bg-white hover:bg-red-50 border border-gray-200 text-red-600 rounded-lg transition-colors shadow-sm"
+                            title="Hapus Pembayaran"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {residentTransactions.length === 0 && (
+                    <p className="text-gray-500 text-center py-8 text-sm italic">
+                      Belum ada transaksi pembayaran di tahun {filterYear}.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Kolom Kanan: Form input (Tambah / Edit) */}
+              <div className="flex flex-col h-full border-t md:border-t-0 md:border-l md:pl-6 pt-6 md:pt-0">
+                <h4 className="font-bold text-gray-800 mb-4 text-sm border-b pb-2">
+                  {editingTx ? "Form Edit Pembayaran" : "Form Tambah Pembayaran Baru"}
+                </h4>
+                <form onSubmit={handleSaveCorrection} className="space-y-4 flex-1">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-650 mb-1">
+                      Tanggal Pembayaran
+                    </label>
+                    <input
+                      required
+                      type="date"
+                      value={corrDate}
+                      onChange={(e) => setCorrDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-650 mb-1">
+                        Periode Bulan
+                      </label>
+                      <select
+                        required
+                        value={corrMonth}
+                        onChange={(e) => setCorrMonth(Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                          <option key={m} value={m}>
+                            {new Date(2000, m - 1).toLocaleString("id-ID", { month: "long" })}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-650 mb-1">
+                        Kategori Iuran
+                      </label>
+                      <select
+                        required
+                        value={corrCategoryId}
+                        onChange={handleCategoryChangeCorr}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="" disabled>Pilih Kategori...</option>
+                        {incomeCategories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-650 mb-1">
+                        Nominal Pembayaran (Rp)
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        value={corrNominal}
+                        onChange={(e) => setCorrNominal(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 font-semibold"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-650 mb-1">
+                        Simpan ke Kas / Rekening
+                      </label>
+                      <select
+                        required
+                        value={corrLocationId}
+                        onChange={(e) => setCorrLocationId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
+                      >
+                        {kasLocations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name} {loc.type !== "Tunai" ? `(${loc.type})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-650 mb-1">
+                      Keterangan Tambahan (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      value={corrDescription}
+                      onChange={(e) => setCorrDescription(e.target.value)}
+                      placeholder="Contoh: Pembayaran iuran tunai via pengurus"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div className="pt-4 border-t flex justify-end gap-2">
+                    {editingTx && (
+                      <button
+                        type="button"
+                        onClick={resetCorrForm}
+                        className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-150 hover:bg-gray-200 rounded-lg transition-colors"
+                      >
+                        Batal Edit
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={!corrCategoryId || !corrNominal}
+                      className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-md disabled:opacity-50"
+                    >
+                      {editingTx ? "Update Pembayaran" : "Simpan Pembayaran"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setCorrectionResident(null)}
+                className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors"
+              >
+                Selesai / Tutup
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
