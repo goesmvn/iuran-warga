@@ -58,6 +58,7 @@ export default function Laporan() {
   const [corrNominal, setCorrNominal] = useState("");
   const [corrLocationId, setCorrLocationId] = useState("");
   const [corrDescription, setCorrDescription] = useState("");
+  const [corrSaveToKas, setCorrSaveToKas] = useState(true); // default true
 
   const yearOptions = Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 2 + i);
 
@@ -222,6 +223,7 @@ export default function Laporan() {
     setCorrNominal(defaultCat?.defaultNominal?.toString() || "");
     setCorrLocationId(kasLocations[0]?.id || "default");
     setCorrDescription("");
+    setCorrSaveToKas(true);
   };
 
   const resetCorrForm = () => {
@@ -233,6 +235,7 @@ export default function Laporan() {
     setCorrNominal(defaultCat?.defaultNominal?.toString() || "");
     setCorrLocationId(kasLocations[0]?.id || "default");
     setCorrDescription("");
+    setCorrSaveToKas(true);
   };
 
   const handleSelectEditTx = (tx: any) => {
@@ -243,17 +246,20 @@ export default function Laporan() {
     setCorrNominal(tx.nominal.toString());
     setCorrLocationId(tx.kasLocationId || kasLocations[0]?.id || "default");
     setCorrDescription(tx.description || "");
+    setCorrSaveToKas(tx.nominal > 0);
   };
 
   const handleSaveCorrection = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!correctionResident || !corrCategoryId || !corrNominal) return;
+    if (!correctionResident || !corrCategoryId) return;
+
+    const finalNominal = corrSaveToKas ? Number(corrNominal) : 0;
 
     if (editingTx) {
       updateTransaction(editingTx.id, {
         date: new Date(corrDate).toISOString(),
         categoryId: corrCategoryId,
-        nominal: Number(corrNominal),
+        nominal: finalNominal,
         description: corrDescription,
         kasLocationId: corrLocationId,
         periodeBulan: corrMonth,
@@ -264,7 +270,7 @@ export default function Laporan() {
         date: new Date(corrDate).toISOString(),
         categoryId: corrCategoryId,
         type: "Pemasukan",
-        nominal: Number(corrNominal),
+        nominal: finalNominal,
         description: corrDescription,
         kasLocationId: corrLocationId,
         residentId: correctionResident.id,
@@ -1226,9 +1232,10 @@ export default function Laporan() {
                       {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
                         const txInfo = w.paidMonthsMap?.get(m);
                         const isHadir = !!txInfo;
-                        const formattedDate = txInfo ? new Date(txInfo.date).toLocaleDateString("id-ID", { day: 'numeric', month: 'short', year: 'numeric' }) : "";
-                        const tooltipText = txInfo 
-                          ? `Lunas: ${formattedDate}\nNominal: Rp ${txInfo.nominal.toLocaleString("id-ID")}\nKategori: ${txInfo.categoryName}` 
+                        const isZeroNominal = isHadir && txInfo.nominal === 0;
+                        const formattedDate = isHadir ? new Date(txInfo.date).toLocaleDateString("id-ID", { day: 'numeric', month: 'short', year: 'numeric' }) : "";
+                        const tooltipText = isHadir 
+                          ? `Lunas: ${formattedDate}\nNominal: Rp ${txInfo.nominal.toLocaleString("id-ID")}${isZeroNominal ? ' (Tanpa Kas)' : ''}\nKategori: ${txInfo.categoryName}` 
                           : "Belum Bayar";
                         
                         return (
@@ -1236,12 +1243,19 @@ export default function Laporan() {
                             {isHadir ? (
                               <span 
                                 title={tooltipText}
-                                className="cursor-help inline-flex w-5 h-5 items-center justify-center bg-green-100 text-green-700 rounded-sm font-bold text-xs ring-1 ring-green-200/50 hover:bg-green-200 transition-colors"
+                                onClick={() => handleOpenCorrection(w)}
+                                className={`cursor-pointer inline-flex w-5 h-5 items-center justify-center rounded-sm font-bold text-xs ring-1 transition-colors ${isZeroNominal ? 'bg-blue-50 text-blue-700 ring-blue-200/50 hover:bg-blue-150' : 'bg-green-100 text-green-700 ring-green-200/50 hover:bg-green-200'}`}
                               >
-                                ✓
+                                {isZeroNominal ? 'K' : '✓'}
                               </span>
                             ) : (
-                              <span title="Belum Bayar" className="text-gray-300">-</span>
+                              <span 
+                                title="Belum Bayar - Klik untuk Koreksi" 
+                                onClick={() => handleOpenCorrection(w)}
+                                className="text-gray-350 hover:text-[#f43f5e] cursor-pointer inline-block w-5 h-5 font-bold transition-all"
+                              >
+                                -
+                              </span>
                             )}
                           </td>
                         )
@@ -1407,85 +1421,144 @@ export default function Laporan() {
 
             {/* Content Body (Split screen) */}
             <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
-              {/* Kolom Kiri: Riwayat Pembayaran */}
-              <div className="flex flex-col h-full min-h-0">
-                <h4 className="font-bold text-gray-800 mb-3 text-sm border-b pb-2 flex-shrink-0">
-                  Riwayat Pembayaran Terdaftar ({residentTransactions.length} Transaksi)
-                </h4>
-                <div className="overflow-y-auto flex-1 space-y-3 pr-2">
-                  {residentTransactions.map((tx) => {
-                    const monthName = tx.periodeBulan
-                      ? new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "long" })
-                      : "-";
-                    return (
-                      <div
-                        key={tx.id}
-                        className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 flex items-center justify-between shadow-sm transition-all"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                              {monthName}
-                            </span>
-                            <span className="text-xs text-gray-500 font-medium">
-                              {new Date(tx.date).toLocaleDateString("id-ID")}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {categories.find((c) => c.id === tx.categoryId)?.name || "-"} •{" "}
-                            {kasLocations.find((l) => l.id === tx.kasLocationId)?.name || "-"}
-                          </p>
-                          <p className="text-sm font-bold text-gray-900">
-                            Rp {tx.nominal.toLocaleString("id-ID")}
-                          </p>
-                          {tx.description && (
-                            <p className="text-[11px] text-gray-500 italic mt-0.5">
-                              "{tx.description}"
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectEditTx(tx)}
-                            className="p-2 bg-white hover:bg-blue-50 border border-gray-200 text-blue-600 rounded-lg transition-colors shadow-sm"
-                            title="Edit Pembayaran"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
+              {/* Kolom Kiri: Riwayat Pembayaran & Cepat Centang */}
+              <div className="flex flex-col h-full min-h-0 space-y-4">
+                {/* Mode Cepat Centang Matriks */}
+                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex-shrink-0">
+                  <h4 className="font-bold text-blue-900 text-xs uppercase tracking-wider mb-2">Cepat Centang / Lunasi Periode</h4>
+                  <p className="text-[10px] text-blue-700 mb-3 leading-relaxed">Centang bulan untuk melunasi instan tanpa dana masuk kas (Nominal Rp 0). Hapus centang untuk menghapus catatan transaksi bulan tersebut.</p>
+                  
+                  <div className="grid grid-cols-4 gap-2">
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                      // cari apakah ada transaksi untuk kategori iuran utama (bulanan) di bulan ini
+                      const matchedTx = residentTransactions.find(t => t.periodeBulan === m);
+                      const isLunas = !!matchedTx;
+                      const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
+                      
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={async () => {
+                            if (isLunas) {
+                              // Konfirmasi hapus transaksi
                               const confirmed = await confirm(
-                                'Hapus Catatan Pembayaran',
-                                'Hapus catatan pembayaran ini? Aksi ini akan seketika merubah data laporan rekap warga.',
+                                'Batalkan Pembayaran',
+                                `Yakin membatalkan status lunas Bulan ${new Date(2000, m - 1).toLocaleString("id-ID", { month: "long" })}? Catatan transaksi akan dihapus.`,
                                 'danger'
                               );
                               if (confirmed) {
-                                deleteTransaction(tx.id);
-                                if (editingTx?.id === tx.id) {
-                                  resetCorrForm();
-                                }
+                                deleteTransaction(matchedTx.id);
                               }
-                            }}
-                            className="p-2 bg-white hover:bg-red-50 border border-gray-200 text-red-600 rounded-lg transition-colors shadow-sm"
-                            title="Hapus Pembayaran"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                            } else {
+                              // Tambah instan Rp 0
+                              if (!defaultCat) return;
+                              addTransaction({
+                                date: new Date().toISOString(),
+                                categoryId: defaultCat.id,
+                                type: "Pemasukan",
+                                nominal: 0,
+                                description: `Koreksi Rekap (Matriks)`,
+                                kasLocationId: kasLocations[0]?.id || "default",
+                                residentId: correctionResident.id,
+                                periodeBulan: m,
+                                periodeTahun: filterYear,
+                              });
+                            }
+                          }}
+                          className={`py-2 rounded-lg text-xs font-bold border transition-all ${isLunas ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+                        >
+                          {new Date(2000, m - 1).toLocaleString("id-ID", { month: "short" })}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex flex-col flex-1 min-h-0">
+                  <h4 className="font-bold text-gray-800 mb-3 text-sm border-b pb-2 flex-shrink-0">
+                    Riwayat Pembayaran Terdaftar ({residentTransactions.length} Transaksi)
+                  </h4>
+                  <div className="overflow-y-auto flex-1 space-y-3 pr-2">
+                    {residentTransactions.map((tx) => {
+                      const monthName = tx.periodeBulan
+                        ? new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "long" })
+                        : "-";
+                      return (
+                        <div
+                          key={tx.id}
+                          className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 flex items-center justify-between shadow-sm transition-all"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                                {monthName}
+                              </span>
+                              <span className="text-xs text-gray-500 font-medium">
+                                {new Date(tx.date).toLocaleDateString("id-ID")}
+                              </span>
+                              {tx.nominal === 0 && (
+                                <span className="font-semibold text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-250">
+                                  Hanya Rekap
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              {categories.find((c) => c.id === tx.categoryId)?.name || "-"} •{" "}
+                              {kasLocations.find((l) => l.id === tx.kasLocationId)?.name || "-"}
+                            </p>
+                            <p className="text-sm font-bold text-gray-900">
+                              Rp {tx.nominal.toLocaleString("id-ID")}
+                            </p>
+                            {tx.description && (
+                              <p className="text-[11px] text-gray-500 italic mt-0.5">
+                                "{tx.description}"
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectEditTx(tx)}
+                              className="p-2 bg-white hover:bg-blue-50 border border-gray-200 text-blue-600 rounded-lg transition-colors shadow-sm"
+                              title="Edit Pembayaran"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const confirmed = await confirm(
+                                  'Hapus Catatan Pembayaran',
+                                  'Hapus catatan pembayaran ini? Aksi ini akan seketika merubah data laporan rekap warga.',
+                                  'danger'
+                                );
+                                if (confirmed) {
+                                  deleteTransaction(tx.id);
+                                  if (editingTx?.id === tx.id) {
+                                    resetCorrForm();
+                                  }
+                                }
+                              }}
+                              className="p-2 bg-white hover:bg-red-50 border border-gray-200 text-red-600 rounded-lg transition-colors shadow-sm"
+                              title="Hapus Pembayaran"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                  {residentTransactions.length === 0 && (
-                    <p className="text-gray-500 text-center py-8 text-sm italic">
-                      Belum ada transaksi pembayaran di tahun {filterYear}.
-                    </p>
-                  )}
+                      );
+                    })}
+                    {residentTransactions.length === 0 && (
+                      <p className="text-gray-500 text-center py-8 text-sm italic">
+                        Belum ada transaksi pembayaran di tahun {filterYear}.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1552,11 +1625,12 @@ export default function Laporan() {
                         Nominal Pembayaran (Rp)
                       </label>
                       <input
-                        required
+                        required={corrSaveToKas}
+                        disabled={!corrSaveToKas}
                         type="number"
-                        value={corrNominal}
+                        value={corrSaveToKas ? corrNominal : "0"}
                         onChange={(e) => setCorrNominal(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 font-semibold"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 font-semibold disabled:bg-gray-100 disabled:text-gray-400"
                         placeholder="0"
                       />
                     </div>
@@ -1566,9 +1640,10 @@ export default function Laporan() {
                       </label>
                       <select
                         required
+                        disabled={!corrSaveToKas}
                         value={corrLocationId}
                         onChange={(e) => setCorrLocationId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 font-medium disabled:bg-gray-100 disabled:text-gray-400"
                       >
                         {kasLocations.map((loc) => (
                           <option key={loc.id} value={loc.id}>
@@ -1577,6 +1652,21 @@ export default function Laporan() {
                         ))}
                       </select>
                     </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={corrSaveToKas}
+                        onChange={(e) => setCorrSaveToKas(e.target.checked)}
+                        className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                      />
+                      <span className="text-xs font-bold text-gray-700">Simpan sebagai Dana Masuk Kas (Buku Besar)</span>
+                    </label>
+                    <p className="text-[10px] text-gray-500 mt-1 pl-6">
+                      Jika dinonaktifkan, pembayaran akan tercatat lunas di rekap matriks, namun nominal transaksi diset Rp 0 agar tidak mempengaruhi neraca kas/buku besar.
+                    </p>
                   </div>
 
                   <div>
@@ -1604,7 +1694,7 @@ export default function Laporan() {
                     )}
                     <button
                       type="submit"
-                      disabled={!corrCategoryId || !corrNominal}
+                      disabled={!corrCategoryId || (corrSaveToKas && !corrNominal)}
                       className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-md disabled:opacity-50"
                     >
                       {editingTx ? "Update Pembayaran" : "Simpan Pembayaran"}
