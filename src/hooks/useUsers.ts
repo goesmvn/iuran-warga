@@ -32,7 +32,16 @@ export function useUsers() {
 
     const updateUser = async (id: string, updatedData: Partial<User>) => {
         setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updatedData } as User: u));
-        // Note: No backend route for update user right now. Added optimistic for consistency.
+        try {
+            const res = await apiFetch(`/api/users/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updatedData)
+            });
+            const data = await res.json();
+            if(!res.ok) await customAlert('Update Gagal', data.error || 'Gagal mengubah pengelola.', 'error');
+        } catch(e) {
+            console.error(e);
+        }
     };
 
     const deleteUser = async (id: string) => {

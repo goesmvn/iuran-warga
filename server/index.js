@@ -190,6 +190,35 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+app.put('/api/users/:id', requireAdmin, (req, res) => {
+  const username = sanitize(req.body?.username);
+  const password = req.body?.password;
+  const name = sanitize(req.body?.name);
+  const role = req.body?.role;
+
+  if (!username || !name) {
+    return res.status(400).json({ error: 'Data pengguna tidak lengkap.' });
+  }
+  if (!['Admin', 'Staff'].includes(role)) {
+    return res.status(400).json({ error: 'Role tidak valid.' });
+  }
+
+  try {
+    if (password && password.trim() !== '') {
+      if (typeof password !== 'string' || password.length < 6 || password.length > 200) {
+        return res.status(400).json({ error: 'Password minimal 6 karakter.' });
+      }
+      const hash = bcrypt.hashSync(password, 10);
+      db.prepare('UPDATE users SET username = ?, password_hash = ?, name = ?, role = ? WHERE id = ?').run(username, hash, name, role, req.params.id);
+    } else {
+      db.prepare('UPDATE users SET username = ?, name = ?, role = ? WHERE id = ?').run(username, name, role, req.params.id);
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: 'Username sudah digunakan.' });
+  }
+});
+
 // =====================================================================
 // SETTINGS - [SEC-06] Admin Only
 // =====================================================================

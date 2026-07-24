@@ -2,19 +2,20 @@ import { useState, useEffect, useRef } from 'react';
 import { useUsers } from '../../hooks/useUsers';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
-import { Shield, Trash2, Plus, X, Settings, Download, Upload, Database, MapPin, Users, CalendarDays, Landmark } from 'lucide-react';
+import { Shield, Trash2, Plus, X, Settings, Download, Upload, Database, MapPin, Users, CalendarDays, Landmark, Edit2 } from 'lucide-react';
 import { apiFetch } from '../../utils/apiFetch';
 import { useConfirm } from '../../contexts/ConfirmContext';
 
 type SettingsTab = 'pengguna' | 'pengaturan' | 'identitas' | 'backup';
 
 export default function Pengelola() {
-  const { users, addUser, deleteUser } = useUsers();
+  const { users, addUser, updateUser, deleteUser } = useUsers();
   const { user: currentUser } = useAuth();
   const { confirm, alert: customAlert } = useConfirm();
   
   const [activeTab, setActiveTab] = useState<SettingsTab>('pengguna');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -162,9 +163,23 @@ export default function Pengelola() {
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
-    addUser({ username, password, name, role });
+    if (editingUserId) {
+      updateUser(editingUserId, { username, name, role, ...(password.trim() !== '' ? { password } : {}) });
+    } else {
+      addUser({ username, password, name, role });
+    }
     setIsModalOpen(false);
+    setEditingUserId(null);
     setUsername(''); setPassword(''); setName(''); setRole('Staff');
+  };
+
+  const handleEditUserClick = (u: any) => {
+    setEditingUserId(u.id);
+    setName(u.name);
+    setUsername(u.username);
+    setRole(u.role);
+    setPassword(''); // biarkan kosong agar password tidak berubah jika tidak diisi
+    setIsModalOpen(true);
   };
 
   const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
@@ -211,7 +226,7 @@ export default function Pengelola() {
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-500">Kelola akun akses aplikasi (Admin & Staff).</p>
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => { setEditingUserId(null); setUsername(''); setPassword(''); setName(''); setRole('Staff'); setIsModalOpen(true); }}
               className="flex items-center gap-2 px-5 py-2.5 bg-[#f43f5e] hover:bg-[#e11d48] text-white rounded-xl text-sm font-bold shadow-sm transition-colors"
             >
               <Plus className="w-4 h-4" /> Tambah
@@ -241,7 +256,14 @@ export default function Pengelola() {
                         {u.role}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right space-x-1">
+                      <button
+                        onClick={() => handleEditUserClick(u)}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit Pengguna"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       {currentUser.id !== u.id && u.username !== 'admin' && (
                         <button
                           onClick={async () => {
@@ -505,11 +527,11 @@ export default function Pengelola() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
-          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => { setIsModalOpen(false); setEditingUserId(null); }}></div>
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden relative z-10">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h3 className="font-bold text-lg text-gray-900">Tambah Akses Pengelola</h3>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+              <h3 className="font-bold text-lg text-gray-900">{editingUserId ? 'Edit Pengelola' : 'Tambah Akses Pengelola'}</h3>
+              <button type="button" onClick={() => { setIsModalOpen(false); setEditingUserId(null); }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
             </div>
             <form onSubmit={handleAddUser} className="p-6 space-y-4">
               <div>
@@ -530,13 +552,13 @@ export default function Pengelola() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Passkey Default</label>
-                <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className={inputClass} />
+                <label className="block text-sm font-bold text-gray-700 mb-1">{editingUserId ? 'Password Baru (kosongkan jika tidak diubah)' : 'Passkey Default'}</label>
+                <input {...(editingUserId ? {} : { required: true })} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={editingUserId ? '••••••' : ''} className={inputClass} />
               </div>
               
               <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">Batal</button>
-                <button type="submit" className="px-5 py-2.5 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] rounded-xl transition-colors shadow-sm">Simpan Kredensial</button>
+                <button type="button" onClick={() => { setIsModalOpen(false); setEditingUserId(null); }} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">Batal</button>
+                <button type="submit" className="px-5 py-2.5 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] rounded-xl transition-colors shadow-sm">{editingUserId ? 'Simpan Perubahan' : 'Simpan Kredensial'}</button>
               </div>
             </form>
           </div>
