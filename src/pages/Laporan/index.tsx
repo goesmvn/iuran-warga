@@ -1439,6 +1439,7 @@ export default function Laporan() {
                         <button
                           key={m}
                           type="button"
+                          disabled={!defaultCat}
                           onClick={async () => {
                             if (isLunas) {
                               // Konfirmasi hapus transaksi
