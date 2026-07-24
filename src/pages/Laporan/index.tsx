@@ -200,98 +200,6 @@ export default function Laporan() {
     return list.sort((a, b) => b.missedMonthsCount - a.missedMonthsCount);
   }, [transactions, warga, filterMonth, filterYear, searchQuery]);
 
-  // === KOREKSI PEMBAYARAN DI REKAP WARGA ===
-  const residentTransactions = useMemo(() => {
-    if (!correctionResident) return [];
-    return transactions.filter(
-      (t) =>
-        t.residentId === correctionResident.id &&
-        t.type === "Pemasukan" &&
-        t.periodeTahun === filterYear
-    );
-  }, [transactions, correctionResident, filterYear]);
-
-  const handleOpenCorrection = (w: any) => {
-    setCorrectionResident(w);
-    setEditingTx(null);
-    
-    // Set defaults
-    setCorrDate(new Date().toISOString().split("T")[0]);
-    setCorrMonth(1);
-    const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
-    setCorrCategoryId(defaultCat?.id || "");
-    setCorrNominal(defaultCat?.defaultNominal?.toString() || "");
-    setCorrLocationId(kasLocations[0]?.id || "default");
-    setCorrDescription("");
-    setCorrSaveToKas(true);
-  };
-
-  const resetCorrForm = () => {
-    setEditingTx(null);
-    setCorrDate(new Date().toISOString().split("T")[0]);
-    setCorrMonth(1);
-    const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
-    setCorrCategoryId(defaultCat?.id || "");
-    setCorrNominal(defaultCat?.defaultNominal?.toString() || "");
-    setCorrLocationId(kasLocations[0]?.id || "default");
-    setCorrDescription("");
-    setCorrSaveToKas(true);
-  };
-
-  const handleSelectEditTx = (tx: any) => {
-    setEditingTx(tx);
-    setCorrDate(tx.date.split("T")[0]);
-    setCorrMonth(tx.periodeBulan || 1);
-    setCorrCategoryId(tx.categoryId);
-    setCorrNominal(tx.nominal.toString());
-    setCorrLocationId(tx.kasLocationId || kasLocations[0]?.id || "default");
-    setCorrDescription(tx.description || "");
-    setCorrSaveToKas(tx.nominal > 0);
-  };
-
-  const handleSaveCorrection = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!correctionResident || !corrCategoryId) return;
-
-    const finalNominal = corrSaveToKas ? Number(corrNominal) : 0;
-
-    if (editingTx) {
-      updateTransaction(editingTx.id, {
-        date: new Date(corrDate).toISOString(),
-        categoryId: corrCategoryId,
-        nominal: finalNominal,
-        description: corrDescription,
-        kasLocationId: corrLocationId,
-        periodeBulan: corrMonth,
-        periodeTahun: filterYear,
-      });
-    } else {
-      addTransaction({
-        date: new Date(corrDate).toISOString(),
-        categoryId: corrCategoryId,
-        type: "Pemasukan",
-        nominal: finalNominal,
-        description: corrDescription,
-        kasLocationId: corrLocationId,
-        residentId: correctionResident.id,
-        periodeBulan: corrMonth,
-        periodeTahun: filterYear,
-      });
-    }
-    resetCorrForm();
-  };
-
-  const handleCategoryChangeCorr = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const cid = e.target.value;
-    setCorrCategoryId(cid);
-    const cat = categories.find((c) => c.id === cid);
-    if (cat?.defaultNominal) {
-      setCorrNominal(cat.defaultNominal.toString());
-    } else {
-      setCorrNominal("");
-    }
-  };
-
   // === REKAPITULASI MATRIKS LOGIC ===
   const bulananCids = useMemo(() => categories.filter(c => c.name.toLowerCase().includes("bulanan") || c.periode === "Bulanan").map(c => c.id), [categories]);
   const tahunanCids = useMemo(() => categories.filter(c => c.name.toLowerCase().includes("tahunan") || c.periode === "Tahunan").map(c => c.id), [categories]);
@@ -340,6 +248,108 @@ export default function Laporan() {
         };
       });
   }, [warga, transactions, filterYear, bulananCids, tahunanCids, searchQuery, activeTab]);
+
+  // === KOREKSI PEMBAYARAN DI REKAP WARGA ===
+  // Menggunakan matching ID dari rekapitulasiList secara dinamis agar UI modal
+  // tidak tertutup atau kehilangan state ketika transaksi diupdate / di-delete.
+  const activeCorrectionResident = useMemo(() => {
+    if (!correctionResident) return null;
+    return rekapitulasiList.find(w => w.id === correctionResident.id) || correctionResident;
+  }, [rekapitulasiList, correctionResident]);
+
+  const residentTransactions = useMemo(() => {
+    if (!activeCorrectionResident) return [];
+    return transactions.filter(
+      (t) =>
+        t.residentId === activeCorrectionResident.id &&
+        t.type === "Pemasukan" &&
+        t.periodeTahun === filterYear
+    );
+  }, [transactions, activeCorrectionResident, filterYear]);
+
+  const handleOpenCorrection = (w: any) => {
+    // Gunakan find untuk mengambil data fresh warga dari state hook utama
+    // agar objek warga memiliki map transaksi terbaru (rekapitulasiList meng-generate paidMonthsMap)
+    const freshWarga = rekapitulasiList.find(x => x.id === w.id) || w;
+    setCorrectionResident(freshWarga);
+    setEditingTx(null);
+    
+    // Set defaults
+    setCorrDate(new Date().toISOString().split("T")[0]);
+    setCorrMonth(1);
+    const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
+    setCorrCategoryId(defaultCat?.id || "");
+    setCorrNominal(defaultCat?.defaultNominal?.toString() || "");
+    setCorrLocationId(kasLocations[0]?.id || "default");
+    setCorrDescription("");
+    setCorrSaveToKas(true);
+  };
+
+  const resetCorrForm = () => {
+    setEditingTx(null);
+    setCorrDate(new Date().toISOString().split("T")[0]);
+    setCorrMonth(1);
+    const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
+    setCorrCategoryId(defaultCat?.id || "");
+    setCorrNominal(defaultCat?.defaultNominal?.toString() || "");
+    setCorrLocationId(kasLocations[0]?.id || "default");
+    setCorrDescription("");
+    setCorrSaveToKas(true);
+  };
+
+  const handleSelectEditTx = (tx: any) => {
+    setEditingTx(tx);
+    setCorrDate(tx.date.split("T")[0]);
+    setCorrMonth(tx.periodeBulan || 1);
+    setCorrCategoryId(tx.categoryId);
+    setCorrNominal(tx.nominal.toString());
+    setCorrLocationId(tx.kasLocationId || kasLocations[0]?.id || "default");
+    setCorrDescription(tx.description || "");
+    setCorrSaveToKas(tx.nominal > 0);
+  };
+
+  const handleSaveCorrection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCorrectionResident || !corrCategoryId) return;
+
+    const finalNominal = corrSaveToKas ? Number(corrNominal) : 0;
+
+    if (editingTx) {
+      updateTransaction(editingTx.id, {
+        date: new Date(corrDate).toISOString(),
+        categoryId: corrCategoryId,
+        nominal: finalNominal,
+        description: corrDescription,
+        kasLocationId: corrLocationId,
+        periodeBulan: corrMonth,
+        periodeTahun: filterYear,
+      });
+    } else {
+      addTransaction({
+        date: new Date(corrDate).toISOString(),
+        categoryId: corrCategoryId,
+        type: "Pemasukan",
+        nominal: finalNominal,
+        description: corrDescription,
+        kasLocationId: corrLocationId,
+        residentId: activeCorrectionResident.id,
+        periodeBulan: corrMonth,
+        periodeTahun: filterYear,
+      });
+    }
+    resetCorrForm();
+  };
+
+  const handleCategoryChangeCorr = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const cid = e.target.value;
+    setCorrCategoryId(cid);
+    const cat = categories.find((c) => c.id === cid);
+    if (cat?.defaultNominal) {
+      setCorrNominal(cat.defaultNominal.toString());
+    } else {
+      setCorrNominal("");
+    }
+  };
 
   // === LAPORAN TAHUNAN LOGIC ===
   const yearCurrent = filterYearTahunan;
@@ -1391,7 +1401,7 @@ export default function Laporan() {
       )}
 
       {/* Modal Koreksi Pembayaran Warga */}
-      {correctionResident && (
+      {correctionResident && activeCorrectionResident && (
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
           <div
             className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
@@ -1405,7 +1415,7 @@ export default function Laporan() {
                   Koreksi Pembayaran Iuran Warga
                 </h3>
                 <p className="text-sm text-blue-700">
-                  {correctionResident.namaKepalaKeluarga} (Blok {correctionResident.nomorRumah}) • Tahun {filterYear}
+                  {activeCorrectionResident.namaKepalaKeluarga} (Blok {activeCorrectionResident.nomorRumah}) • Tahun {filterYear}
                 </p>
               </div>
               <button
@@ -1461,7 +1471,7 @@ export default function Laporan() {
                                 nominal: 0,
                                 description: `Koreksi Rekap (Matriks)`,
                                 kasLocationId: kasLocations[0]?.id || "default",
-                                residentId: correctionResident.id,
+                                residentId: activeCorrectionResident.id,
                                 periodeBulan: m,
                                 periodeTahun: filterYear,
                               });
