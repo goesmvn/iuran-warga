@@ -1628,9 +1628,12 @@ export default function Laporan() {
                       <input
                         required={corrSaveToKas}
                         disabled={!corrSaveToKas}
-                        type="number"
-                        value={corrSaveToKas ? corrNominal : "0"}
-                        onChange={(e) => setCorrNominal(e.target.value)}
+                        type="text"
+                        value={corrSaveToKas ? (Number(corrNominal || 0).toLocaleString('id-ID')) : "0"}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, "");
+                          setCorrNominal(raw);
+                        }}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 font-semibold disabled:bg-gray-100 disabled:text-gray-400"
                         placeholder="0"
                       />
