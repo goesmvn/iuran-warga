@@ -75,8 +75,8 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
             
             {/* Header Struk */}
             <div className="text-center mb-6">
-              <div className="w-12 h-12 mx-auto mb-3 grayscale print:grayscale-0 opacity-80">
-                 <JepunIcon className="w-full h-full" />
+              <div className="w-12 h-12 mx-auto mb-3 opacity-95 flex items-center justify-center bg-gray-900 rounded-full p-1.5 print:bg-transparent print:p-0">
+                 <JepunIcon className="w-full h-full text-white print:text-gray-900" />
               </div>
               <h2 className="font-bold text-base print:text-sm uppercase tracking-widest">{settings['nama_organisasi'] || settings['rt_name'] || 'Organisasi Warga'}</h2>
               {settings['nama_desa'] && (

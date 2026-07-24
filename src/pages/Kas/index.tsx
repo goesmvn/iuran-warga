@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
@@ -10,9 +10,16 @@ import {
   ArrowRightLeft,
   Landmark,
   Plus,
+  Search,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import type { Transaction } from "../../types";
 import { useConfirm } from "../../contexts/ConfirmContext";
+
+type SortField = 'date' | 'category' | 'description' | 'kas' | 'nominal';
+type SortOrder = 'asc' | 'desc';
 
 export default function Kas() {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransaksi();
@@ -25,6 +32,55 @@ export default function Kas() {
   const [isModalSaldoOpen, setIsModalSaldoOpen] = useState(false);
   
   const startYear = settings?.start_year || new Date().getFullYear().toString();
+
+  // Search & Filters State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedType, setSelectedType] = useState<"Semua" | "Pemasukan" | "Pengeluaran">("Semua");
+  const [selectedKas, setSelectedKas] = useState("Semua");
+
+  // Sorting State
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+
+  // Column Widths State (for resizable columns)
+  const [colWidths, setColWidths] = useState<Record<string, number>>({
+    date: 140,
+    category: 160,
+    description: 250,
+    kas: 150,
+    nominal: 150,
+    action: 100
+  });
+
+  const resizingCol = useRef<string | null>(null);
+  const startX = useRef<number>(0);
+  const startWidth = useRef<number>(0);
+
+  const startResize = (colKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingCol.current = colKey;
+    startX.current = e.clientX;
+    startWidth.current = colWidths[colKey] || 150;
+    
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+  };
+
+  const handleResize = (e: MouseEvent) => {
+    if (!resizingCol.current) return;
+    const diff = e.clientX - startX.current;
+    const newWidth = Math.max(80, startWidth.current + diff);
+    setColWidths(prev => ({
+      ...prev,
+      [resizingCol.current!]: newWidth
+    }));
+  };
+
+  const stopResize = () => {
+    resizingCol.current = null;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+  };
 
   // Form State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -103,14 +159,108 @@ export default function Kas() {
     setIsModalSaldoOpen(false);
   };
 
-
-
   const getCategoryName = (id: string) =>
     categories.find((c) => c.id === id)?.name || "Unknown";
   const getResidentName = (id?: string) =>
     warga.find((w) => w.id === id)?.namaKepalaKeluarga || "-";
   const getLocationName = (id?: string) =>
     locations.find((l) => l.id === id)?.name || "Tunai";
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  // Filtered & Sorted Transactions
+  const processedTransactions = useMemo(() => {
+    let result = [...transactions];
+
+    // Filter Type
+    if (selectedType !== "Semua") {
+      result = result.filter(t => t.type === selectedType);
+    }
+
+    // Filter Kas Location
+    if (selectedKas !== "Semua") {
+      result = result.filter(t => t.kasLocationId === selectedKas);
+    }
+
+    // Search term
+    if (searchTerm.trim() !== "") {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(t => {
+        const catName = getCategoryName(t.categoryId).toLowerCase();
+        const residentName = getResidentName(t.residentId).toLowerCase();
+        const desc = (t.description || "").toLowerCase();
+        const locName = getLocationName(t.kasLocationId).toLowerCase();
+        const tanggalStr = new Date(t.date).toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }).toLowerCase();
+
+        return catName.includes(term) ||
+               residentName.includes(term) ||
+               desc.includes(term) ||
+               locName.includes(term) ||
+               tanggalStr.includes(term);
+      });
+    }
+
+    // Sort logic
+    result.sort((a, b) => {
+      let valA: any = "";
+      let valB: any = "";
+
+      switch (sortField) {
+        case 'date':
+          valA = new Date(a.date).getTime();
+          valB = new Date(b.date).getTime();
+          break;
+        case 'category':
+          valA = getCategoryName(a.categoryId).toLowerCase();
+          valB = getCategoryName(b.categoryId).toLowerCase();
+          break;
+        case 'description':
+          const descA = a.type === "Pemasukan"
+            ? `${getResidentName(a.residentId)} ${a.periodeBulan ? `(${new Date(2000, a.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${a.periodeTahun})` : ''}`
+            : a.description;
+          const descB = b.type === "Pemasukan"
+            ? `${getResidentName(b.residentId)} ${b.periodeBulan ? `(${new Date(2000, b.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${b.periodeTahun})` : ''}`
+            : b.description;
+          valA = descA.toLowerCase();
+          valB = descB.toLowerCase();
+          break;
+        case 'kas':
+          valA = getLocationName(a.kasLocationId).toLowerCase();
+          valB = getLocationName(b.kasLocationId).toLowerCase();
+          break;
+        case 'nominal':
+          valA = a.nominal;
+          valB = b.nominal;
+          break;
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+
+      // Fallback to secondary sort by date/time (always desc to prioritize latest)
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+    return result;
+  }, [transactions, searchTerm, selectedType, selectedKas, sortField, sortOrder, categories, warga, locations]);
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3.5 h-3.5 ml-1 text-gray-400 inline" />;
+    return sortOrder === 'asc' 
+      ? <ChevronUp className="w-3.5 h-3.5 ml-1 text-gray-800 inline" /> 
+      : <ChevronDown className="w-3.5 h-3.5 ml-1 text-gray-800 inline" />;
+  };
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto">
@@ -133,108 +283,170 @@ export default function Kas() {
         </div>
       </div>
 
+      {/* Filter & Search Bar */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6 mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+        <div className="relative col-span-1 md:col-span-2">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari transaksi (keterangan, warga, tanggal)..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium text-gray-900"
+          />
+        </div>
+
+        <div>
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value as any)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-bold text-gray-800 bg-white"
+          >
+            <option value="Semua">Semua Tipe</option>
+            <option value="Pemasukan">Pemasukan</option>
+            <option value="Pengeluaran">Pengeluaran</option>
+          </select>
+        </div>
+
+        <div>
+          <select
+            value={selectedKas}
+            onChange={(e) => setSelectedKas(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-bold text-gray-800 bg-white"
+          >
+            <option value="Semua">Semua Lokasi Kas</option>
+            {locations.map(loc => (
+              <option key={loc.id} value={loc.id}>{loc.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
           <h3 className="font-semibold text-gray-800">
             Riwayat Transaksi Terakhir (Buku Besar)
           </h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="text-gray-500 font-medium bg-gray-50 border-b border-gray-100">
+        <div className="overflow-x-auto relative">
+          <table className="w-full text-left text-sm whitespace-nowrap table-fixed">
+            <thead className="text-gray-500 font-medium bg-gray-50 border-b border-gray-100 select-none">
               <tr>
-                <th className="px-6 py-4">Tanggal</th>
-                <th className="px-6 py-4">Kategori</th>
-                <th className="px-6 py-4">Keterangan / Warga</th>
-                <th className="px-6 py-4">Lokasi Kas</th>
-                <th className="px-6 py-4 text-right">Nominal</th>
-                <th className="px-6 py-4 text-center">Aksi</th>
+                <th style={{ width: colWidths.date }} className="px-6 py-4 relative group">
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort('date')}>
+                    Tanggal <SortIcon field="date" />
+                  </div>
+                  <div onMouseDown={(e) => startResize('date', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-gray-300 active:bg-gray-400 transition-colors" />
+                </th>
+                <th style={{ width: colWidths.category }} className="px-6 py-4 relative group">
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort('category')}>
+                    Kategori <SortIcon field="category" />
+                  </div>
+                  <div onMouseDown={(e) => startResize('category', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-gray-300 active:bg-gray-400 transition-colors" />
+                </th>
+                <th style={{ width: colWidths.description }} className="px-6 py-4 relative group">
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort('description')}>
+                    Keterangan / Warga <SortIcon field="description" />
+                  </div>
+                  <div onMouseDown={(e) => startResize('description', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-gray-300 active:bg-gray-400 transition-colors" />
+                </th>
+                <th style={{ width: colWidths.kas }} className="px-6 py-4 relative group">
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort('kas')}>
+                    Lokasi Kas <SortIcon field="kas" />
+                  </div>
+                  <div onMouseDown={(e) => startResize('kas', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-gray-300 active:bg-gray-400 transition-colors" />
+                </th>
+                <th style={{ width: colWidths.nominal }} className="px-6 py-4 text-right relative group">
+                  <div className="flex items-center justify-end cursor-pointer" onClick={() => handleSort('nominal')}>
+                    Nominal <SortIcon field="nominal" />
+                  </div>
+                  <div onMouseDown={(e) => startResize('nominal', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-gray-300 active:bg-gray-400 transition-colors" />
+                </th>
+                <th style={{ width: colWidths.action }} className="px-6 py-4 text-center">
+                  Aksi
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {transactions
-                .sort(
-                  (a, b) =>
-                    new Date(b.date).getTime() - new Date(a.date).getTime(),
-                )
-                .map((tx) => (
-                  <tr
-                    key={tx.id}
-                    className="hover:bg-gray-50/50 transition-colors"
-                  >
-                    <td className="px-6 py-4 text-gray-600 font-medium">
-                      {new Date(tx.date).toLocaleDateString("id-ID", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-6 py-4">
-                      {tx.categoryId === "cat-transfer" ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700">
-                          <ArrowRightLeft className="w-3 h-3" />
-                          Transfer
-                        </span>
-                      ) : (
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold ${
-                            tx.type === "Pemasukan"
-                              ? "bg-green-50 text-green-700"
-                              : "bg-red-50 text-red-700"
-                          }`}
-                        >
-                          {tx.type === "Pemasukan" ? (
-                            <ArrowDownRight className="w-3 h-3" />
-                          ) : (
-                            <ArrowUpRight className="w-3 h-3" />
-                          )}
-                          {getCategoryName(tx.categoryId)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-gray-800 font-semibold max-w-[200px] truncate">
-                      {tx.type === "Pemasukan"
-                        ? `${getResidentName(tx.residentId)} ${tx.periodeBulan ? `(${new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${tx.periodeTahun})` : ''}`
-                        : tx.description}
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      <span className="flex items-center gap-1.5 text-xs font-medium bg-gray-100 px-2.5 py-1 rounded-md">
-                        <Landmark className="w-3 h-3" /> {getLocationName(tx.kasLocationId ?? DEFAULT_KAS_LOCATION_ID)}
+              {processedTransactions.map((tx) => (
+                <tr
+                  key={tx.id}
+                  className="hover:bg-gray-50/50 transition-colors"
+                >
+                  <td className="px-6 py-4 text-gray-600 font-medium truncate" style={{ width: colWidths.date }}>
+                    {new Date(tx.date).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </td>
+                  <td className="px-6 py-4 truncate" style={{ width: colWidths.category }}>
+                    {tx.categoryId === "cat-transfer" ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700">
+                        <ArrowRightLeft className="w-3 h-3" />
+                        Transfer
                       </span>
-                    </td>
-                    <td
-                      className={`px-6 py-4 text-right font-bold ${tx.type === "Pemasukan" ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {tx.type === "Pemasukan" ? "+" : "-"} Rp{" "}
-                      {tx.nominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex justify-center gap-2">
-                          <button
-                            onClick={async () => {
-                              const confirmed = await confirm(
-                                'Hapus Catatan Transaksi',
-                                'Yakin menghapus catatan transaksi ini? Aksi ini akan seketika mengubah laporan arus kas seluruh keuangan.',
-                                'danger'
-                              );
-                              if (confirmed) {
-                                deleteTransaction(tx.id);
-                              }
-                            }}
-                            className="text-red-500 hover:bg-red-50 hover:text-red-700 p-1.5 rounded-lg transition-colors border border-transparent"
-                            title="Hapus Transaksi"
-                          >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-                          </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              {transactions.length === 0 && (
+                    ) : (
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold ${
+                          tx.type === "Pemasukan"
+                            ? "bg-green-50 text-green-700"
+                            : "bg-red-50 text-red-700"
+                        }`}
+                      >
+                        {tx.type === "Pemasukan" ? (
+                          <ArrowDownRight className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpRight className="w-3 h-3" />
+                        )}
+                        {getCategoryName(tx.categoryId)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-gray-800 font-semibold truncate" style={{ width: colWidths.description }}>
+                    {tx.type === "Pemasukan"
+                      ? `${getResidentName(tx.residentId)} ${tx.periodeBulan ? `(${new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${tx.periodeTahun})` : ''}`
+                      : tx.description}
+                  </td>
+                  <td className="px-6 py-4 text-gray-500 truncate" style={{ width: colWidths.kas }}>
+                    <span className="flex items-center gap-1.5 text-xs font-medium bg-gray-100 px-2.5 py-1 rounded-md">
+                      <Landmark className="w-3 h-3" /> {getLocationName(tx.kasLocationId ?? DEFAULT_KAS_LOCATION_ID)}
+                    </span>
+                  </td>
+                  <td
+                    className={`px-6 py-4 text-right font-bold truncate ${tx.type === "Pemasukan" ? "text-green-600" : "text-red-600"}`}
+                    style={{ width: colWidths.nominal }}
+                  >
+                    {tx.type === "Pemasukan" ? "+" : "-"} Rp{" "}
+                    {tx.nominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-6 py-4 text-center truncate" style={{ width: colWidths.action }}>
+                    <div className="flex justify-center gap-2">
+                        <button
+                          onClick={async () => {
+                            const confirmed = await confirm(
+                              'Hapus Catatan Transaksi',
+                              'Yakin menghapus catatan transaksi ini? Aksi ini akan seketika mengubah laporan arus kas seluruh keuangan.',
+                              'danger'
+                            );
+                            if (confirmed) {
+                              deleteTransaction(tx.id);
+                            }
+                          }}
+                          className="text-red-500 hover:bg-red-50 hover:text-red-700 p-1.5 rounded-lg transition-colors border border-transparent"
+                          title="Hapus Transaksi"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                        </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {processedTransactions.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-16 text-center">
                     <p className="text-gray-500 font-medium text-lg">
-                      Belum ada transaksi terekam.
+                      Tidak ada transaksi yang cocok dengan pencarian.
                     </p>
                   </td>
                 </tr>

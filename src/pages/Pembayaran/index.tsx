@@ -11,7 +11,8 @@ import {
   Wallet,
   Receipt as ReceiptIcon,
   Check,
-  CalendarDays
+  CalendarDays,
+  X
 } from "lucide-react";
 import type { Transaction } from "../../types";
 import { ReceiptModal, type ReceiptData } from "../../components/ReceiptModal";
@@ -19,13 +20,56 @@ import { useConfirm } from "../../contexts/ConfirmContext";
 
 export default function Pembayaran() {
   const { transactions, addTransaction } = useTransaksi();
-  const { warga } = useWarga();
+  const { warga, addWarga } = useWarga();
   const { categories } = useCategory();
   const { locations } = useKasLocation();
   const { alert: customAlert } = useConfirm();
 
-  // Form State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+
+  // Form State Warga Baru Modal
+  const [isWargaModalOpen, setIsWargaModalOpen] = useState(false);
+  const [newNamaKepalaKeluarga, setNewNamaKepalaKeluarga] = useState("");
+  const [newNomorRumah, setNewNomorRumah] = useState("");
+  const [newNoHp, setNewNoHp] = useState("");
+  const [newStatus, setNewStatus] = useState<"Aktif" | "Pindah">("Aktif");
+  const [newTanggalMasuk, setNewTanggalMasuk] = useState(new Date().toISOString().split("T")[0]);
+
+  const handleAddWargaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNamaKepalaKeluarga || !newNomorRumah || !newTanggalMasuk) {
+      customAlert("Lengkapi Data", "Nama, Blok/No. Rumah, dan Tanggal Masuk wajib diisi.", "warning");
+      return;
+    }
+    const payload = {
+      namaKepalaKeluarga: newNamaKepalaKeluarga,
+      nomorRumah: newNomorRumah,
+      noHp: newNoHp,
+      status: newStatus,
+      tanggalMasuk: new Date(newTanggalMasuk).toISOString(),
+    };
+    try {
+      const generatedId = `warga-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      // Override ID logic inside useWarga by sending payload with local ID
+      await addWarga({ ...payload, id: generatedId } as any);
+      setIsWargaModalOpen(false);
+      
+      // Auto select new warga after creation
+      setResidentId(generatedId);
+      
+      // Reset form
+      setNewNamaKepalaKeluarga("");
+      setNewNomorRumah("");
+      setNewNoHp("");
+      setNewStatus("Aktif");
+      setNewTanggalMasuk(new Date().toISOString().split("T")[0]);
+      setSearchWarga("");
+      customAlert("Sukses", "Warga baru berhasil ditambahkan.", "success");
+    } catch (err) {
+      console.error(err);
+      customAlert("Gagal", "Gagal menambahkan warga baru.", "error");
+    }
+  };
   const [kasLocationId, setKasLocationId] = useState(DEFAULT_KAS_LOCATION_ID);
 
   const [searchWarga, setSearchWarga] = useState("");
@@ -58,12 +102,18 @@ export default function Pembayaran() {
   const periodicCategories = useMemo(() => {
      return Object.keys(selectedCategories).filter(cid => {
          const cat = categories.find(c => c.id === cid);
-         return cat?.name.toLowerCase().includes("bulanan") || cat?.periode === "Bulanan" || 
-                cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
+         return cat?.name.toLowerCase().includes("bulanan") || cat?.periode === "Bulanan";
      });
   }, [selectedCategories, categories]);
 
   const hasPeriodic = periodicCategories.length > 0;
+
+  const hasTahunan = useMemo(() => {
+     return Object.keys(selectedCategories).some(cid => {
+         const cat = categories.find(c => c.id === cid);
+         return cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
+     });
+  }, [selectedCategories, categories]);
 
   const paidSet = useMemo(() => {
     if (!residentId) return new Set<string>();
@@ -152,22 +202,36 @@ export default function Pembayaran() {
 
   // Auto-check 12 months if Tahunan is selected
   useEffect(() => {
-      const hasTahunan = Object.keys(selectedCategories).some(cid => {
+      const selectedTahunanCids = Object.keys(selectedCategories).filter(cid => {
           const cat = categories.find(c => c.id === cid);
           return cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
       });
-      if (hasTahunan) {
+      
+      if (selectedTahunanCids.length > 0) {
           setSelectedMonths(prev => {
-              const newSet = [...prev];
-              let changed = false;
+              // Hapus bulan-bulan lain yang di tahun ini (biar digantikan full)
+              const otherYears = prev.filter(s => s.tahun !== paymentYear);
+              const newSet = [...otherYears];
+              
+              // Masukkan ke-12 bulan untuk tahun terpilih (kecuali yang sudah lunas sebelumnya di database)
               for (let i = 1; i <= 12; i++) {
-                  if (!paidSet.has(`${paymentYear}-${i}`) && !newSet.some(s => s.bulan === i && s.tahun === paymentYear)) {
+                  if (!paidSet.has(`${paymentYear}-${i}`)) {
                       newSet.push({ bulan: i, tahun: paymentYear });
-                      changed = true;
                   }
               }
-              return changed ? newSet : prev;
+              return newSet;
           });
+      } else {
+          // If no tahunan is selected, clear only the auto-checked 12 months that were selected for Tahunan
+          // but do not blindly clear the selected months if user is just switching options,
+          // only reset if no periodic iuran is selected.
+          const hasPeriodicSelected = Object.keys(selectedCategories).some(cid => {
+              const cat = categories.find(c => c.id === cid);
+              return cat?.name.toLowerCase().includes("bulanan") || cat?.periode === "Bulanan";
+          });
+          if (!hasPeriodicSelected) {
+              setSelectedMonths([]);
+          }
       }
   }, [paymentYear, selectedCategories, paidSet, categories]);
 
@@ -207,8 +271,8 @@ export default function Pembayaran() {
       return;
     }
 
-    if (hasPeriodic && selectedMonths.length === 0) {
-      customAlert("Pilih Bulan", "Pilih minimal 1 bulan pada tahun yang dituju untuk iuran bulanan.", "warning");
+    if ((hasPeriodic || hasTahunan) && selectedMonths.length === 0) {
+      customAlert("Pilih Bulan", "Pilih minimal 1 bulan pada tahun yang dituju untuk iuran.", "warning");
       return;
     }
     
@@ -219,6 +283,8 @@ export default function Pembayaran() {
 
     const refId = "TRX-" + Date.now().toString().slice(-6);
 
+    const txPromises: Promise<any>[] = [];
+
     catIds.forEach(cid => {
        const cat = categories.find(c => c.id === cid);
        const isTahunan = cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
@@ -226,6 +292,14 @@ export default function Pembayaran() {
        const nom = selectedCategories[cid];
 
        if (isTahunan) {
+            // Cek apakah tahun terpilih sudah lunas/terisi
+            // Jika ada bulan di tahun ini yang sudah lunas, iuran tahunan tidak bisa disubmit (karena akan double)
+            const hasAnyPaidInYear = Array.from({ length: 12 }, (_, i) => i + 1).some(m => paidSet.has(`${paymentYear}-${m}`));
+            if (hasAnyPaidInYear) {
+              customAlert("Gagal", `Beberapa bulan pada Tahun ${paymentYear} sudah memiliki transaksi pembayaran. Batalkan transaksi lama terlebih dahulu.`, "error");
+              return;
+            }
+
             const payload: Omit<Transaction, "id"> = {
               date: new Date(date).toISOString(),
               categoryId: cid,
@@ -236,8 +310,16 @@ export default function Pembayaran() {
               periodeTahun: paymentYear,
               kasLocationId
             };
-            addTransaction(payload);
+            txPromises.push(addTransaction(payload));
        } else if (isPeriodic && selectedMonths.length > 0) {
+          // Cek double input untuk iuran bulanan
+          const alreadyPaidMonths = selectedMonths.filter(sm => paidSet.has(`${sm.tahun}-${sm.bulan}`));
+          if (alreadyPaidMonths.length > 0) {
+             const paidStr = alreadyPaidMonths.map(sm => `${sm.bulan}/${sm.tahun}`).join(", ");
+             customAlert("Duplikasi Pembayaran", `Bulan berikut sudah dibayar sebelumnya: ${paidStr}. Mohon hapus centang bulan tersebut sebelum menyimpan.`, "warning");
+             return;
+          }
+
           selectedMonths.forEach((sm) => {
             const payload: Omit<Transaction, "id"> = {
               date: new Date(date).toISOString(),
@@ -250,7 +332,7 @@ export default function Pembayaran() {
               periodeTahun: sm.tahun,
               kasLocationId
             };
-            addTransaction(payload);
+            txPromises.push(addTransaction(payload));
           });
        } else if (!isPeriodic && !isTahunan) {
           const payload: Omit<Transaction, "id"> = {
@@ -262,7 +344,7 @@ export default function Pembayaran() {
               residentId,
               kasLocationId
           };
-          addTransaction(payload);
+          txPromises.push(addTransaction(payload));
        }
     });
 
@@ -273,17 +355,32 @@ export default function Pembayaran() {
       date: new Date(date).toISOString(),
       residentName: activeWarga?.namaKepalaKeluarga || 'Warga',
       residentBlock: activeWarga?.nomorRumah || 'Blok',
-      items: summaryDetails,
+      items: summaryDetails.map(item => {
+        const cat = categories.find(c => c.id === item.id);
+        const isTahunan = cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
+        const isPeriodic = periodicCategories.includes(item.id) && !isTahunan;
+        if (isPeriodic && selectedMonths.length > 0) {
+          const monthsStr = selectedMonths
+            .map(sm => `${new Date(2000, sm.bulan - 1).toLocaleString("id-ID", { month: "short" })} ${sm.tahun}`)
+            .join(", ");
+          return { ...item, title: `${item.title} [${monthsStr}]` };
+        }
+        if (isTahunan) {
+          return { ...item, title: `${item.title} [Tahun ${paymentYear}]` };
+        }
+        return item;
+      }),
       total: grandTotal,
       kasName: kasLocName,
       transactionId: refId
     });
 
-    // Reset Form
-    setSearchWarga("");
-    setResidentId("");
-    setSelectedMonths([]);
-    setSelectedCategories({});
+    // Reset Form (handled on receipt modal close now to prevent UI flickering)
+    Promise.all(txPromises).then(() => {
+      // no-op, state resets on onClose ReceiptModal
+    }).catch(err => {
+      console.error("Gagal menyimpan beberapa transaksi:", err);
+    });
   };
 
   const getResidentName = (id?: string) =>
@@ -336,7 +433,21 @@ export default function Pembayaran() {
 
               {/* Section 2: Warga */}
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1.5">Identitas Pendana / Warga</label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-sm font-bold text-gray-700">Identitas Pendana / Warga</label>
+                  {!residentId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewNamaKepalaKeluarga(searchWarga);
+                        setIsWargaModalOpen(true);
+                      }}
+                      className="text-xs font-bold text-[#f43f5e] hover:text-[#e11d48] transition-colors flex items-center gap-1"
+                    >
+                      + Tambah Warga Baru
+                    </button>
+                  )}
+                </div>
                 {!residentId ? (
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -353,6 +464,17 @@ export default function Pembayaran() {
                             <span className="text-orange-600 bg-orange-100 px-3 py-1 rounded-lg font-bold text-xs">Pilih</span>
                           </div>
                         ))}
+                        {filteredWarga.length === 0 && (
+                          <div
+                            onClick={() => {
+                              setNewNamaKepalaKeluarga(searchWarga);
+                              setIsWargaModalOpen(true);
+                            }}
+                            className="px-4 py-4 hover:bg-orange-50 cursor-pointer text-center text-sm text-gray-500 font-medium transition-colors"
+                          >
+                            Warga tidak ditemukan. Klik untuk <span className="text-[#f43f5e] font-bold">Tambah Warga Baru "{searchWarga}"</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -446,13 +568,13 @@ export default function Pembayaran() {
                  </div>
               </div>
 
-              {/* Section 4: Pembayaran Bulanan (Tampil jika ada kategori bulanan) */}
-              {residentId && hasPeriodic && (
+              {/* Section 4: Pembayaran Bulanan (Tampil jika ada kategori bulanan atau tahunan) */}
+              {residentId && (hasPeriodic || hasTahunan) && (
                 <div className="bg-orange-50/50 border border-orange-200 rounded-xl p-5 relative overflow-hidden animate-in zoom-in-95 duration-300">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2 text-orange-800">
                       <CheckSquare className="w-5 h-5" />
-                      <h4 className="font-bold">Periode Bulan <span className="text-xs font-medium bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full ml-2">Wajib</span></h4>
+                      <h4 className="font-bold">Periode Bulan <span className="text-xs font-medium bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full ml-2">{hasTahunan ? 'Tahunan' : 'Wajib'}</span></h4>
                     </div>
                     <select value={paymentYear} onChange={(e) => setPaymentYear(Number(e.target.value))} className="px-3 py-1.5 rounded-lg border border-orange-300 font-bold text-orange-900 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20">
                       {yearOptions.map((y) => <option key={y} value={y}>Tahun {y}</option>)}
@@ -466,7 +588,7 @@ export default function Pembayaran() {
 
                       return (
                         <button
-                            type="button" key={m} disabled={isPaid} onClick={() => toggleMonthSelection(m, paymentYear)}
+                            type="button" key={m} disabled={isPaid || hasTahunan} onClick={() => toggleMonthSelection(m, paymentYear)}
                             className={`px-1 py-3 rounded-xl text-sm font-bold border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${
                               isPaid ? "bg-green-100/30 text-green-700 border-green-100 cursor-not-allowed opacity-70" : isSelected ? "bg-[#f43f5e] text-white border-[#e11d48] shadow-md transform scale-105" : "bg-white text-orange-800 border-orange-200 hover:bg-orange-100 hover:border-orange-300 hover:-translate-y-0.5"
                             }`}
@@ -508,7 +630,7 @@ export default function Pembayaran() {
                     </div>
                 </div>
 
-                <button type="submit" disabled={!residentId || Object.keys(selectedCategories).length === 0 || !kasLocationId || (hasPeriodic && selectedMonths.length === 0)} className="w-full py-4 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] disabled:opacity-50 disabled:hover:bg-[#f43f5e] disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-[#f43f5e]/20 flex justify-center items-center gap-2 group">
+                <button type="submit" disabled={!residentId || Object.keys(selectedCategories).length === 0 || !kasLocationId || ((hasPeriodic || hasTahunan) && selectedMonths.length === 0)} className="w-full py-4 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] disabled:opacity-50 disabled:hover:bg-[#f43f5e] disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-[#f43f5e]/20 flex justify-center items-center gap-2 group">
                    <CheckSquare className="w-5 h-5 group-disabled:opacity-50" />
                    Simpan & Cetak
                 </button>
@@ -522,9 +644,105 @@ export default function Pembayaran() {
       
       <ReceiptModal 
         isOpen={!!receiptData} 
-        onClose={() => setReceiptData(null)} 
+        onClose={() => {
+          setReceiptData(null);
+          // Reset form state ONLY after modal is closed
+          setSearchWarga("");
+          setResidentId("");
+          setSelectedMonths([]);
+          setSelectedCategories({});
+        }} 
         data={receiptData} 
       />
+
+      {/* Simple Warga Modal */}
+      {isWargaModalOpen && (
+        <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsWargaModalOpen(false)}></div>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <h3 className="font-bold text-gray-800">Tambah Warga Baru</h3>
+              <button
+                type="button"
+                onClick={() => setIsWargaModalOpen(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddWargaSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Nama Kepala Keluarga *</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="I Wayan Darma"
+                  value={newNamaKepalaKeluarga}
+                  onChange={(e) => setNewNamaKepalaKeluarga(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#f43f5e] font-bold text-sm text-gray-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Blok / No. Rumah *</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Blok A/12"
+                  value={newNomorRumah}
+                  onChange={(e) => setNewNomorRumah(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#f43f5e] font-bold text-sm text-gray-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">No. Handphone</label>
+                <input
+                  type="text"
+                  placeholder="08..."
+                  value={newNoHp}
+                  onChange={(e) => setNewNoHp(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#f43f5e] font-bold text-sm text-gray-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Status *</label>
+                <select
+                  required
+                  value={newStatus}
+                  onChange={(e) => setNewStatus(e.target.value as "Aktif" | "Pindah")}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#f43f5e] font-bold text-sm text-gray-900"
+                >
+                  <option value="Aktif">Aktif Menetap</option>
+                  <option value="Pindah">Pindah</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Tanggal Masuk *</label>
+                <input
+                  required
+                  type="date"
+                  value={newTanggalMasuk}
+                  onChange={(e) => setNewTanggalMasuk(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#f43f5e] font-bold text-sm text-gray-900"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full bg-[#f43f5e] hover:bg-[#e11d48] text-white font-bold py-2.5 rounded-lg transition-colors text-sm"
+                >
+                  Simpan Warga
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

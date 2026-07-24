@@ -39,8 +39,8 @@ export function useWarga() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const addWarga = async (newWarga: Omit<Resident, 'id'>) => {
-        const id = `warga-${Date.now()}`;
+    const addWarga = async (newWarga: Omit<Resident, 'id'> & { id?: string }) => {
+        const id = newWarga.id || `warga-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const payload = { ...newWarga, id };
         
         setWarga(prev => [...prev, payload]); // Optimistic update

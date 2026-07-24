@@ -13,7 +13,7 @@ export function useTransaksi() {
     }, []);
 
     const addTransaction = async (newTx: Omit<Transaction, 'id'>) => {
-        const id = `tx-${Date.now()}`;
+        const id = `tx-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const payload = { ...newTx, id };
         setTransactions(prev => [...prev, payload]); // Optimistic
         try {
