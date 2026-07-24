@@ -225,7 +225,8 @@ app.get('/api/warga', (req, res) => {
     nomorRumah: w.nomorRumah,
     status: w.status,
     noHp: w.phone || '',
-    tanggalMasuk: w.createdAt
+    tanggalMasuk: w.createdAt,
+    roleWarga: w.roleWarga || 'Warga'
   })));
 });
 
@@ -235,12 +236,13 @@ app.post('/api/warga', (req, res) => {
   const status = req.body?.status;
   const noHp = sanitize(req.body?.noHp);
   const tanggalMasuk = req.body?.tanggalMasuk;
+  const roleWarga = sanitize(req.body?.roleWarga) || 'Warga';
   const id = sanitize(req.body?.id) || `warga-${Date.now()}`;
 
   if (!nama || !nomorRumah) return res.status(400).json({ error: 'Nama dan nomor rumah wajib diisi.' });
   if (!['Aktif', 'Pindah'].includes(status)) return res.status(400).json({ error: 'Status tidak valid.' });
 
-  db.prepare('INSERT INTO warga (id, namaKepalaKeluarga, nomorRumah, status, phone, createdAt) VALUES (?, ?, ?, ?, ?, ?)').run(id, nama, nomorRumah, status, noHp, tanggalMasuk || new Date().toISOString());
+  db.prepare('INSERT INTO warga (id, namaKepalaKeluarga, nomorRumah, status, phone, roleWarga, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, nama, nomorRumah, status, noHp, roleWarga, tanggalMasuk || new Date().toISOString());
   res.json({ success: true, id });
 });
 
@@ -250,11 +252,12 @@ app.put('/api/warga/:id', (req, res) => {
   const status = req.body?.status;
   const noHp = sanitize(req.body?.noHp);
   const tanggalMasuk = req.body?.tanggalMasuk;
+  const roleWarga = sanitize(req.body?.roleWarga) || 'Warga';
 
   if (!nama || !nomorRumah) return res.status(400).json({ error: 'Data tidak lengkap.' });
   if (!['Aktif', 'Pindah'].includes(status)) return res.status(400).json({ error: 'Status tidak valid.' });
 
-  db.prepare('UPDATE warga SET namaKepalaKeluarga = ?, nomorRumah = ?, status = ?, phone = ?, createdAt = ? WHERE id = ?').run(nama, nomorRumah, status, noHp, tanggalMasuk || new Date().toISOString(), req.params.id);
+  db.prepare('UPDATE warga SET namaKepalaKeluarga = ?, nomorRumah = ?, status = ?, phone = ?, roleWarga = ?, createdAt = ? WHERE id = ?').run(nama, nomorRumah, status, noHp, roleWarga, tanggalMasuk || new Date().toISOString(), req.params.id);
   res.json({ success: true });
 });
 

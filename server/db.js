@@ -44,6 +44,7 @@ const initDB = () => {
       status TEXT NOT NULL,
       blockNumber TEXT,
       phone TEXT,
+      roleWarga TEXT DEFAULT 'Warga',
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 

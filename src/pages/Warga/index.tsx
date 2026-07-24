@@ -19,6 +19,7 @@ export default function Warga() {
   const [nomorRumah, setNomorRumah] = useState("");
   const [namaKepalaKeluarga, setNamaKepalaKeluarga] = useState("");
   const [noHp, setNoHp] = useState("");
+  const [roleWarga, setRoleWarga] = useState("Warga");
   const [status, setStatus] = useState<"Aktif" | "Pindah">("Aktif");
   const [tanggalMasuk, setTanggalMasuk] = useState(
     new Date().toISOString().split("T")[0],
@@ -55,6 +56,7 @@ export default function Warga() {
     setNomorRumah("");
     setNamaKepalaKeluarga("");
     setNoHp("");
+    setRoleWarga("Warga");
     setStatus("Aktif");
     setTanggalMasuk(new Date().toISOString().split("T")[0]);
     setIsModalOpen(true);
@@ -65,6 +67,7 @@ export default function Warga() {
     setNomorRumah(w.nomorRumah);
     setNamaKepalaKeluarga(w.namaKepalaKeluarga);
     setNoHp(w.noHp || "");
+    setRoleWarga(w.roleWarga || "Warga");
     setStatus(w.status);
     setTanggalMasuk(w.tanggalMasuk.split("T")[0].split(" ")[0]);
     setIsModalOpen(true);
@@ -76,6 +79,7 @@ export default function Warga() {
       nomorRumah,
       namaKepalaKeluarga,
       noHp,
+      roleWarga,
       status,
       tanggalMasuk: new Date(tanggalMasuk).toISOString(),
     };
@@ -211,7 +215,14 @@ export default function Warga() {
                     {w.nomorRumah}
                   </td>
                   <td className="px-6 py-4 text-gray-700 font-medium">
-                    {w.namaKepalaKeluarga}
+                    <div>
+                      <span className="font-bold text-gray-900">{w.namaKepalaKeluarga}</span>
+                      {w.roleWarga && w.roleWarga !== 'Warga' && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                          {w.roleWarga}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-gray-500">{w.noHp || "-"}</td>
                   <td className="px-6 py-4">
@@ -392,6 +403,21 @@ export default function Warga() {
                     <option value="Pindah">Pindah / Keluar</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Jabatan Kepengurusan
+                  </label>
+                  <input
+                    type="text"
+                    value={roleWarga}
+                    onChange={(e) => setRoleWarga(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-shadow"
+                    placeholder="Cth: Ketua RT, Bendahara, Warga"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Tanggal Masuk

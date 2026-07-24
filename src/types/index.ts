@@ -5,6 +5,7 @@ export interface Resident {
     noHp?: string;
     status: 'Aktif' | 'Pindah';
     tanggalMasuk: string; // ISO date string
+    roleWarga?: string; // e.g. 'Ketua RT', 'Bendahara', 'Warga Biasa'
 }
 
 export interface Category {
