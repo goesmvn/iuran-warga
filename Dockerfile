@@ -27,12 +27,9 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 
 # Install native build tools for better-sqlite3, then clean up
-RUN apk add --no-cache python3 make g++ && \
-    npm install -g npm@latest --quiet
-
-# Copy package files and install ONLY production dependencies
 COPY package*.json ./
-RUN npm install --omit=dev && \
+RUN apk add --no-cache python3 make g++ && \
+    npm install --omit=dev && \
     apk del python3 make g++ && \
     npm cache clean --force
 
