@@ -8,6 +8,7 @@ import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import db from './db.js';
+import { startBackupScheduler, runAutoBackup } from './backup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -480,6 +481,102 @@ app.post('/api/restore', requireAdmin, express.raw({ type: '*/*', limit: '50mb' 
   }
 });
 
+// GET /api/backup-settings
+app.get('/api/backup-settings', requireAdmin, (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM settings').all();
+    const settings = {};
+    rows.forEach(r => settings[r.key] = r.value);
+    
+    res.json({
+      backup_interval: settings['backup_interval'] || 'Nonaktif',
+      gdrive_backup_enabled: settings['gdrive_backup_enabled'] === 'true',
+      gdrive_folder_id: settings['gdrive_folder_id'] || '',
+      has_credentials: !!settings['gdrive_credentials'],
+      last_backup_time: settings['last_backup_time'] ? Number(settings['last_backup_time']) : null
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal mengambil setelan backup.' });
+  }
+});
+
+// POST /api/backup-settings
+app.post('/api/backup-settings', requireAdmin, (req, res) => {
+  try {
+    const { backup_interval, gdrive_backup_enabled, gdrive_folder_id, gdrive_credentials } = req.body;
+
+    const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+    
+    if (backup_interval) {
+      stmt.run('backup_interval', sanitize(backup_interval));
+    }
+    if (gdrive_backup_enabled !== undefined) {
+      stmt.run('gdrive_backup_enabled', gdrive_backup_enabled ? 'true' : 'false');
+    }
+    if (gdrive_folder_id !== undefined) {
+      stmt.run('gdrive_folder_id', sanitize(gdrive_folder_id));
+    }
+    if (gdrive_credentials) {
+      // Validasi format JSON key Google Drive
+      try {
+        const parsed = JSON.parse(gdrive_credentials);
+        if (!parsed.client_email || !parsed.private_key) {
+          throw new Error('Format Service Account tidak valid.');
+        }
+        stmt.run('gdrive_credentials', JSON.stringify(parsed));
+      } catch (e) {
+        return res.status(400).json({ error: 'JSON Service Account Key tidak valid.' });
+      }
+    }
+
+    res.json({ success: true, message: 'Setelan backup berhasil disimpan.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal menyimpan setelan backup.' });
+  }
+});
+
+// POST /api/backup-test (Trigger test backup ke GDrive secara instan)
+app.post('/api/backup-test', requireAdmin, async (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM settings').all();
+    const settings = {};
+    rows.forEach(r => settings[r.key] = r.value);
+
+    const gdriveEnabled = settings['gdrive_backup_enabled'] === 'true';
+    const credsStr = settings['gdrive_credentials'];
+    const folderId = settings['gdrive_folder_id'] || '';
+
+    if (!gdriveEnabled || !credsStr) {
+      return res.status(400).json({ error: 'Google Drive Backup belum diaktifkan atau kredensial kosong!' });
+    }
+
+    const dataDir = path.join(__dirname, '..', 'data');
+    const tempBackupPath = path.join(dataDir, 'backup-test-temp.sqlite');
+    
+    // Backup DB
+    await db.backup(tempBackupPath);
+
+    // Upload
+    const credentials = JSON.parse(credsStr);
+    const { uploadToGDrive } = await import('./backup.js');
+    await uploadToGDrive(tempBackupPath, credentials, folderId);
+
+    // Unlink
+    if (fs.existsSync(tempBackupPath)) {
+      fs.unlinkSync(tempBackupPath);
+    }
+
+    // Save last backup time
+    const now = Date.now();
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .run('last_backup_time', now.toString());
+
+    res.json({ success: true, message: 'Test backup ke Google Drive berhasil diunggah!', last_backup_time: now });
+  } catch (error) {
+    res.status(500).json({ error: `Gagal test backup: ${error.message}` });
+  }
+});
+
 // Ping endpoint
 app.get('/api/ping', (req, res) => res.send('pong'));
 
@@ -499,4 +596,5 @@ app.use((err, req, res, _next) => {
 const host = process.env.HOST || '127.0.0.1';
 app.listen(port, host, () => {
   console.log(`JepunKas API running on ${host}:${port}`);
+  startBackupScheduler();
 });

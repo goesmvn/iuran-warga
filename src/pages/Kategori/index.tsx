@@ -132,7 +132,92 @@ export default function DaftarIuran() {
 
       {/* List / Table Container */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile View (Card List) */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {categories.map((cat) => {
+            const isUsed = transactions.some(t => t.categoryId === cat.id);
+            return (
+              <div key={cat.id} className="p-4 flex flex-col gap-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-900 text-sm leading-snug">{cat.name}</p>
+                    {cat.description && (
+                      <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{cat.description}</p>
+                    )}
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {cat.type === "Pemasukan" ? (
+                      <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[9px] font-bold uppercase">Masuk</span>
+                    ) : (
+                      <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-[9px] font-bold uppercase">Keluar</span>
+                    )}
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${cat.periode === "Tahunan" ? 'text-purple-700 bg-purple-50 border border-purple-100' : cat.periode === "Insidental" ? 'text-rose-700 bg-rose-50 border border-rose-100' : 'text-blue-700 bg-blue-50 border border-blue-100'}`}>
+                      {cat.periode || "Bulanan"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs border-t border-gray-50 pt-2">
+                  <div>
+                    <span className="text-gray-400">Nominal:</span>{" "}
+                    <span className="font-bold text-gray-900">
+                      {cat.defaultNominal ? `Rp ${cat.defaultNominal.toLocaleString('id-ID')}` : "Bebas"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {cat.showInPayment !== false ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wider bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded-full inline-flex items-center gap-0.5"><CheckCircle2 className="w-2.5 h-2.5"/>Tampil</span>
+                    ) : (
+                      <span className="text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full inline-flex items-center gap-0.5"><X className="w-2.5 h-2.5"/>Sembunyi</span>
+                    )}
+                    
+                    <button
+                      onClick={() => setEditingCategory(cat)}
+                      className="p-1 text-orange-600 hover:bg-orange-50 border border-gray-100 rounded-md transition-colors"
+                      title="Edit Iuran"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    
+                    {isUsed ? (
+                      <button
+                        type="button"
+                        className="p-1 text-gray-300 border border-gray-50 rounded-md cursor-not-allowed"
+                        title="Tidak bisa dihapus karena sudah dipakai"
+                        onClick={async () => {
+                          await customAlert('Kategori Masih Digunakan', "Kategori ini tidak dapat dihapus karena sudah digunakan dalam " + transactions.filter(t => t.categoryId === cat.id).length + " pencatatan transaksi.", 'warning');
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          const confirmed = await confirm('Hapus Kategori', `Yakin menghapus kategori iuran *${cat.name}* secara permanen?`, 'danger');
+                          if (confirmed) {
+                            deleteCategory(cat.id);
+                          }
+                        }}
+                        className="p-1 text-red-500 hover:bg-red-50 border border-gray-100 rounded-md transition-colors"
+                        title="Hapus Iuran"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {categories.length === 0 && (
+            <div className="p-12 text-center text-gray-400">
+              Belum ada Iuran atau Kategori yang dibuat.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View (Table) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead className="bg-[#e2e8f0] text-gray-800">
               <tr>
@@ -209,7 +294,7 @@ export default function DaftarIuran() {
                         ) : (
                           <button
                             onClick={async () => {
-                              const confirmed = await confirm('Hapus Kategori', 'Yakin menghapus kategori iuran ini secara permanen?', 'danger');
+                              const confirmed = await confirm('Hapus Kategori', `Yakin menghapus kategori iuran *${cat.name}* secara permanen?`, 'danger');
                               if (confirmed) {
                                 deleteCategory(cat.id);
                               }

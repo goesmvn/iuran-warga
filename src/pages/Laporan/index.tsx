@@ -50,6 +50,7 @@ export default function Laporan() {
   // Correction Modal States
   const [correctionResident, setCorrectionResident] = useState<any | null>(null);
   const [editingTx, setEditingTx] = useState<any | null>(null);
+  const [corrModalTab, setCorrModalTab] = useState<'quick_riwayat' | 'form'>('quick_riwayat');
   
   // Correction Form States
   const [corrDate, setCorrDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -273,6 +274,7 @@ export default function Laporan() {
     const freshWarga = rekapitulasiList.find(x => x.id === w.id) || w;
     setCorrectionResident(freshWarga);
     setEditingTx(null);
+    setCorrModalTab('quick_riwayat');
     
     // Set defaults
     setCorrDate(new Date().toISOString().split("T")[0]);
@@ -287,6 +289,7 @@ export default function Laporan() {
 
   const resetCorrForm = () => {
     setEditingTx(null);
+    setCorrModalTab('quick_riwayat');
     setCorrDate(new Date().toISOString().split("T")[0]);
     setCorrMonth(1);
     const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
@@ -306,6 +309,7 @@ export default function Laporan() {
     setCorrLocationId(tx.kasLocationId || kasLocations[0]?.id || "default");
     setCorrDescription(tx.description || "");
     setCorrSaveToKas(tx.nominal > 0);
+    setCorrModalTab('form');
   };
 
   const handleSaveCorrection = (e: React.FormEvent) => {
@@ -569,7 +573,7 @@ export default function Laporan() {
       </div>
 
       {/* Filter Bar */}
-      <div className="print:hidden bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="print:hidden bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-4">
         {activeTab === "Pertanggal" ? (
           <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
             <Filter className="w-5 h-5 text-gray-400" />
@@ -643,12 +647,12 @@ export default function Laporan() {
             </div>
           </div>
         ) : activeTab === "Bulanan" ? (
-          <div className="flex items-center gap-3">
-            <Filter className="w-5 h-5 text-gray-400" />
+          <div className="flex flex-wrap items-center gap-3">
+            <Filter className="w-5 h-5 text-gray-400 shrink-0" />
             <select
               value={filterMonth}
               onChange={(e) => setFilterMonth(Number(e.target.value))}
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
+              className="flex-1 min-w-[140px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>
@@ -713,8 +717,8 @@ export default function Laporan() {
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <Filter className="w-5 h-5 text-gray-400" />
+          <div className="flex flex-wrap items-center gap-3">
+            <Filter className="w-5 h-5 text-gray-400 shrink-0" />
             <label className="text-sm font-medium text-gray-600">Pilih Tahun Laporan:</label>
             <input
               type="number"
@@ -727,7 +731,7 @@ export default function Laporan() {
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {(activeTab === "Bulanan" || activeTab === "Tunggakan" || activeTab === "Pertanggal") && (
             <button
               onClick={exportCSV}
@@ -830,7 +834,7 @@ export default function Laporan() {
           </div>
 
           {/* Tanda Tangan */}
-          <div className="grid grid-cols-2 mt-12 mb-8 text-center items-end text-sm text-gray-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-12 mb-8 text-center items-end text-sm text-gray-800">
             <div className="leading-relaxed">
               <p>Dibuat Oleh,</p>
               <div className="h-24"></div>
@@ -887,7 +891,60 @@ export default function Laporan() {
                 Detail Transaksi Keuangan ({pertanggalTransactions.length} Transaksi)
               </h3>
             </div>
-            <div className="overflow-x-auto print:overflow-visible">
+            {/* Mobile View (Card List): Tampil di layar kecil (< md), disembunyikan saat print */}
+            <div className="md:hidden print:hidden divide-y divide-gray-100">
+              {pertanggalTransactions.map((t) => {
+                const isPemasukan = t.type === "Pemasukan";
+                const w = isPemasukan ? warga.find((w) => w.id === t.residentId) : null;
+                const categoryName = categories.find((c) => c.id === t.categoryId)?.name || "-";
+                const locationName = kasLocations.find((l) => l.id === t.kasLocationId)?.name || "-";
+
+                let periodText = "-";
+                if (t.periodeBulan && t.periodeTahun) {
+                  const monthName = new Date(2000, t.periodeBulan - 1).toLocaleString("id-ID", { month: "short" });
+                  periodText = `${monthName} ${t.periodeTahun}`;
+                } else if (t.periodeTahun) {
+                  periodText = `Tahun ${t.periodeTahun}`;
+                }
+
+                return (
+                  <div key={t.id} className="p-4 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-500">
+                        {new Date(t.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                      <span className={`text-sm font-black ${isPemasukan ? "text-green-600" : "text-red-600"}`}>
+                        {isPemasukan ? "+" : "-"} Rp {t.nominal.toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">
+                        {w ? (
+                          <span>
+                            {w.namaKepalaKeluarga} <span className="text-gray-400 font-mono text-xs">({w.nomorRumah})</span>
+                          </span>
+                        ) : (
+                          t.description || "-"
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold mt-1 text-gray-500">
+                      <span className="px-2 py-0.5 rounded bg-gray-100">{categoryName}</span>
+                      {periodText !== "-" && <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800">{periodText}</span>}
+                      <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800">{locationName}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {pertanggalTransactions.length === 0 && (
+                <div className="p-8 text-center text-gray-500 text-sm">
+                  Tidak ada transaksi dalam rentang tanggal ini.
+                </div>
+              )}
+            </div>
+
+            {/* Desktop View (Table): disembunyikan di mobile, tampil di md+ dan print */}
+            <div className="hidden md:block overflow-x-auto print:overflow-visible print:!block">
               <table className="w-full text-left text-sm whitespace-nowrap border-collapse animate-fade-in">
                 <thead className="text-gray-750 font-bold bg-[#f3f4f6] print:bg-gray-200">
                   <tr>
@@ -1050,7 +1107,55 @@ export default function Laporan() {
               <ArrowDownUp className="w-5 h-5 text-gray-400 print:hidden" />
               <h3 className="font-bold text-gray-800">Arus Kas Per Bulan — Tahun {filterYearTahunan}</h3>
             </div>
-            <div className="overflow-x-auto print:overflow-visible">
+            {/* Mobile View (Card List): Tampil di layar kecil (< md), disembunyikan saat print */}
+            <div className="md:hidden print:hidden divide-y divide-gray-100">
+              {arusKasData.map((d) => (
+                <div key={d.bulan} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-gray-900 text-sm capitalize">{d.namabulan}</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${d.netto >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                      {d.netto >= 0 ? "+" : ""}{d.netto !== 0 ? `Rp ${d.netto.toLocaleString('id-ID')}` : 'Rp 0'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+                    <div className="flex justify-between">
+                      <span>Saldo Awal:</span>
+                      <span className="font-medium text-gray-700">Rp {d.saldoAwal.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Saldo Akhir:</span>
+                      <span className="font-bold text-gray-800">Rp {d.saldoAkhir.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-green-700 font-medium">Uang Masuk:</span>
+                      <span className="text-green-700 font-semibold">{d.masuk > 0 ? `Rp ${d.masuk.toLocaleString('id-ID')}` : '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-red-600 font-medium">Uang Keluar:</span>
+                      <span className="text-red-600 font-semibold">{d.keluar > 0 ? `Rp ${d.keluar.toLocaleString('id-ID')}` : '-'}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {/* Ringkasan Total Mobile */}
+              <div className="p-4 bg-gray-50 border-t space-y-1.5 text-xs">
+                <div className="flex justify-between font-medium">
+                  <span>Total Pemasukan:</span>
+                  <span className="text-green-700 font-bold">Rp {totalArusKas.masuk.toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span>Total Pengeluaran:</span>
+                  <span className="text-red-600 font-bold">Rp {totalArusKas.keluar.toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between font-extrabold text-sm pt-1.5 border-t">
+                  <span>Saldo Akhir Kas ({filterYearTahunan}):</span>
+                  <span className="text-blue-900">Rp {getTotalKasAkhir(filterYearTahunan).toLocaleString('id-ID')}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop View (Table): Tampil di md+ dan print */}
+            <div className="hidden md:block overflow-x-auto print:overflow-visible print:!block">
               <table className="w-full text-sm border-collapse">
                 <thead className="bg-gray-100 print:bg-gray-200 text-gray-700">
                   <tr>
@@ -1213,7 +1318,54 @@ export default function Laporan() {
               </div>
             </div>
 
-            <div className="overflow-x-auto print:overflow-visible">
+            {/* Mobile card view (< md): hindari tabel 14 kolom nyamping */}
+            <div className="md:hidden print:hidden divide-y divide-gray-100">
+              {rekapitulasiList.map(w => (
+                <div key={w.id} className={`p-4 ${w.status === 'Pindah' ? 'opacity-50' : ''}`}>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 text-sm truncate">
+                        <span className="text-gray-400 font-mono mr-1.5">{w.nomorRumah}</span>
+                        {w.namaKepalaKeluarga}
+                        {w.status === 'Pindah' && <span className="ml-1.5 text-[9px] font-normal italic text-red-500">(Pindah)</span>}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCorrection(w)}
+                      className="shrink-0 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded border border-blue-200 font-semibold text-[10px] uppercase transition-colors"
+                    >
+                      Koreksi
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"].map((label, idx) => {
+                      const m = idx + 1;
+                      const txInfo = w.paidMonthsMap?.get(m);
+                      const isHadir = !!txInfo;
+                      const isZeroNominal = isHadir && txInfo.nominal === 0;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => handleOpenCorrection(w)}
+                          className={`flex flex-col items-center justify-center py-1.5 rounded-md text-[10px] font-bold ring-1 transition-colors ${
+                            isHadir
+                              ? (isZeroNominal ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-green-100 text-green-700 ring-green-200')
+                              : 'bg-gray-50 text-gray-350 ring-gray-200'
+                          }`}
+                        >
+                          <span>{label}</span>
+                          <span>{isHadir ? (isZeroNominal ? 'K' : '✓') : '-'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto print:overflow-visible print:!block">
               <table className="w-full text-left font-mono text-xs whitespace-nowrap border-collapse">
                 <thead className="bg-gray-100 border-b-2 border-gray-200 print:bg-gray-200">
                   <tr>
@@ -1283,10 +1435,10 @@ export default function Laporan() {
                   ))}
                 </tbody>
               </table>
-              {rekapitulasiList.length === 0 && (
-                <div className="p-8 text-center text-gray-500 font-medium">Buku belum memiliki data Warga. Silakan tambahkan pada direktori warga.</div>
-              )}
             </div>
+            {rekapitulasiList.length === 0 && (
+              <div className="p-8 text-center text-gray-500 font-medium">Buku belum memiliki data Warga. Silakan tambahkan pada direktori warga.</div>
+            )}
           </div>
           <PrintFooter />
         </div>
@@ -1314,7 +1466,58 @@ export default function Laporan() {
                 {filterYear}
               </p>
             </div>
-            <div className="overflow-x-auto print:overflow-visible">
+            {/* Mobile View (Card List): Tampil di layar kecil (< md), disembunyikan saat print */}
+            <div className="md:hidden print:hidden divide-y divide-gray-150">
+              {arrearsList.map((w) => {
+                const templateSetting = settings['wa_template_tunggakan'] || `Om Swastyastu / Halo Bapak/Ibu {{nama}} (Blok {{blok}}),\n\nKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *{{bulan}} bulan* di tahun berjalan.\n\nMohon konfirmasinya jika sudah melakukan pembayaran agar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.\n\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏`;
+
+                const parsedMessage = templateSetting
+                  .replace(/\{\{nama\}\}/g, w.namaKepalaKeluarga)
+                  .replace(/\{\{blok\}\}/g, w.nomorRumah)
+                  .replace(/\{\{bulan\}\}/g, String(w.missedMonthsCount));
+
+                const message = encodeURIComponent(parsedMessage);
+                const waLink = w.noHp
+                  ? `https://wa.me/${w.noHp.replace(/^0/, "62")}?text=${message}`
+                  : `https://wa.me/?text=${message}`;
+
+                return (
+                  <div key={w.id} className="p-4 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 text-sm">
+                        <span className="text-gray-400 font-mono mr-1.5">{w.nomorRumah}</span>
+                        {w.namaKepalaKeluarga}
+                      </p>
+                      <p className="text-xs text-red-600 font-semibold mt-1">
+                        Menunggak: {w.missedMonthsCount} Bulan
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold border text-green-700 bg-green-50 hover:bg-green-100 border-green-200 transition-colors shadow-sm"
+                      >
+                        Tagih WA
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+              {arrearsList.length === 0 && (
+                <div className="p-12 text-center">
+                  <div className="inline-flex justify-center items-center w-10 h-10 rounded-full bg-green-50 mb-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  </div>
+                  <p className="text-gray-900 font-bold text-sm">Lunas Semua!</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Tidak ada warga menunggak.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Desktop View (Table): Tampil di md+ dan print */}
+            <div className="hidden md:block overflow-x-auto print:overflow-visible print:!block">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="text-gray-500 font-medium bg-gray-50 border-b border-gray-100 print:bg-gray-200">
                   <tr>
@@ -1402,26 +1605,26 @@ export default function Laporan() {
 
       {/* Modal Koreksi Pembayaran Warga */}
       {correctionResident && activeCorrectionResident && (
-        <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
+        <div className="fixed inset-0 z-50 flex justify-center items-center p-0 sm:p-4">
           <div
             className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
             onClick={() => setCorrectionResident(null)}
           ></div>
-          <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden relative z-10 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto max-w-5xl shadow-2xl overflow-hidden relative z-10 flex flex-col max-h-[100dvh] sm:max-h-[90vh]">
             {/* Header */}
-            <div className="px-6 py-4 border-b flex justify-between items-center bg-blue-50 border-blue-100 flex-shrink-0">
-              <div>
-                <h3 className="font-bold text-lg text-blue-900">
+            <div className="px-4 sm:px-6 py-4 border-b flex justify-between items-start gap-3 bg-blue-50 border-blue-100 flex-shrink-0">
+              <div className="min-w-0">
+                <h3 className="font-bold text-base sm:text-lg text-blue-900">
                   Koreksi Pembayaran Iuran Warga
                 </h3>
-                <p className="text-sm text-blue-700">
+                <p className="text-xs sm:text-sm text-blue-700 truncate">
                   {activeCorrectionResident.namaKepalaKeluarga} (Blok {activeCorrectionResident.nomorRumah}) • Tahun {filterYear}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setCorrectionResident(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 shrink-0"
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1429,36 +1632,65 @@ export default function Laporan() {
               </button>
             </div>
 
+            {/* Mobile Tab Navigation */}
+            <div className="flex md:hidden border-b bg-gray-50/50 p-1.5 gap-1.5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setCorrModalTab('quick_riwayat')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                  corrModalTab === 'quick_riwayat'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                Centang & Riwayat ({residentTransactions.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCorrModalTab('form')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                  corrModalTab === 'form'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {editingTx ? 'Edit Pembayaran' : 'Tambah Baru'}
+              </button>
+            </div>
+
             {/* Content Body (Split screen) */}
-            <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col md:flex-row gap-6 min-h-0">
               {/* Kolom Kiri: Riwayat Pembayaran & Cepat Centang */}
-              <div className="flex flex-col h-full min-h-0 space-y-4">
+              <div className={`flex flex-col w-full md:w-1/2 md:h-full min-h-0 space-y-4 ${corrModalTab === 'quick_riwayat' ? 'flex' : 'hidden md:flex'}`}>
                 {/* Mode Cepat Centang Matriks */}
                 <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex-shrink-0">
                   <h4 className="font-bold text-blue-900 text-xs uppercase tracking-wider mb-2">Cepat Centang / Lunasi Periode</h4>
                   <p className="text-[10px] text-blue-700 mb-3 leading-relaxed">Centang bulan untuk melunasi instan tanpa dana masuk kas (Nominal Rp 0). Hapus centang untuk menghapus catatan transaksi bulan tersebut.</p>
                   
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
                       // cari apakah ada transaksi untuk kategori iuran utama (bulanan) di bulan ini
                       const matchedTx = residentTransactions.find(t => t.periodeBulan === m);
-                      const isLunas = !!matchedTx;
+                      const isCoveredByTahunan = residentTransactions.some(t => tahunanCids.includes(t.categoryId));
+                      const isLunas = !!matchedTx || isCoveredByTahunan;
                       const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
                       
                       return (
                         <button
                           key={m}
                           type="button"
-                          disabled={!defaultCat}
+                          disabled={!defaultCat || isCoveredByTahunan}
+                          title={isCoveredByTahunan ? "Lunas via Iuran Tahunan (Edit/Hapus transaksi tahunan di bawah)" : ""}
                           onClick={async () => {
                             if (isLunas) {
+                              if (isCoveredByTahunan) return; // guard
                               // Konfirmasi hapus transaksi
                               const confirmed = await confirm(
                                 'Batalkan Pembayaran',
-                                `Yakin membatalkan status lunas Bulan ${new Date(2000, m - 1).toLocaleString("id-ID", { month: "long" })}? Catatan transaksi akan dihapus.`,
+                                `Yakin membatalkan status lunas *Bulan ${new Date(2000, m - 1).toLocaleString("id-ID", { month: "long" })}*? Catatan transaksi akan dihapus.`,
                                 'danger'
                               );
-                              if (confirmed) {
+                              if (confirmed && matchedTx) {
                                 deleteTransaction(matchedTx.id);
                               }
                             } else {
@@ -1477,7 +1709,13 @@ export default function Laporan() {
                               });
                             }
                           }}
-                          className={`py-2 rounded-lg text-xs font-bold border transition-all ${isLunas ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+                          className={`py-2 px-1 rounded-lg text-[11px] sm:text-xs font-bold border transition-all ${
+                            isCoveredByTahunan 
+                              ? 'bg-purple-600 text-white border-purple-700 shadow-sm cursor-not-allowed opacity-90' 
+                              : isLunas 
+                                ? 'bg-blue-600 text-white border-blue-700 shadow-sm' 
+                                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                          }`}
                         >
                           {new Date(2000, m - 1).toLocaleString("id-ID", { month: "short" })}
                         </button>
@@ -1486,11 +1724,11 @@ export default function Laporan() {
                   </div>
                 </div>
 
-                <div className="flex flex-col flex-1 min-h-0">
+                <div className="flex flex-col md:flex-1 min-h-0">
                   <h4 className="font-bold text-gray-800 mb-3 text-sm border-b pb-2 flex-shrink-0">
                     Riwayat Pembayaran Terdaftar ({residentTransactions.length} Transaksi)
                   </h4>
-                  <div className="overflow-y-auto flex-1 space-y-3 pr-2">
+                  <div className="md:overflow-y-auto md:max-h-none md:flex-1 space-y-3 pr-0 md:pr-2">
                     {residentTransactions.map((tx) => {
                       const monthName = tx.periodeBulan
                         ? new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "long" })
@@ -1498,9 +1736,9 @@ export default function Laporan() {
                       return (
                         <div
                           key={tx.id}
-                          className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 flex items-center justify-between shadow-sm transition-all"
+                          className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-all"
                         >
-                          <div className="space-y-1">
+                          <div className="space-y-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
                                 {monthName}
@@ -1527,7 +1765,7 @@ export default function Laporan() {
                               </p>
                             )}
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 self-end sm:self-auto shrink-0">
                             <button
                               type="button"
                               onClick={() => handleSelectEditTx(tx)}
@@ -1541,9 +1779,12 @@ export default function Laporan() {
                             <button
                               type="button"
                               onClick={async () => {
+                                const catName = categories.find((c) => c.id === tx.categoryId)?.name || "Iuran";
+                                const mName = tx.periodeBulan ? new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "long" }) : "";
+                                const txDetail = `${catName} ${mName} ${tx.periodeTahun || filterYear}`;
                                 const confirmed = await confirm(
                                   'Hapus Catatan Pembayaran',
-                                  'Hapus catatan pembayaran ini? Aksi ini akan seketika merubah data laporan rekap warga.',
+                                  `Hapus catatan pembayaran *${txDetail}*? Aksi ini akan seketika merubah data laporan rekap warga.`,
                                   'danger'
                                 );
                                 if (confirmed) {
@@ -1574,7 +1815,7 @@ export default function Laporan() {
               </div>
 
               {/* Kolom Kanan: Form input (Tambah / Edit) */}
-              <div className="flex flex-col h-full border-t md:border-t-0 md:border-l md:pl-6 pt-6 md:pt-0">
+              <div className={`flex flex-col w-full md:w-1/2 md:h-full border-t md:border-t-0 md:border-l md:pl-6 pt-6 md:pt-0 ${corrModalTab === 'form' ? 'flex' : 'hidden md:flex'}`}>
                 <h4 className="font-bold text-gray-800 mb-4 text-sm border-b pb-2">
                   {editingTx ? "Form Edit Pembayaran" : "Form Tambah Pembayaran Baru"}
                 </h4>
@@ -1592,7 +1833,7 @@ export default function Laporan() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-650 mb-1">
                         Periode Bulan

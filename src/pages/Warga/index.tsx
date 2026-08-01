@@ -193,7 +193,77 @@ export default function Warga() {
       </div>
 
       <div className="print:hidden bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile View (Card List) */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {displayedWarga.map((w) => (
+            <div key={w.id} className="p-4 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-gray-900 text-sm">
+                  <span className="text-gray-400 font-mono mr-1.5">{w.nomorRumah}</span>
+                  {w.namaKepalaKeluarga}
+                  {w.roleWarga && w.roleWarga !== 'Warga' && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800">
+                      {w.roleWarga}
+                    </span>
+                  )}
+                </p>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    w.status === "Aktif"
+                      ? "bg-green-150 text-green-700"
+                      : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {w.status}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>HP: {w.noHp || "-"}</span>
+                <span>Masuk: {new Date(w.tanggalMasuk).toLocaleDateString("id-ID", { year: "numeric", month: "short" })}</span>
+              </div>
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => setPrintWarga(w)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+                  title="Cetak Kartu Iuran"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Kartu
+                </button>
+                <button
+                  onClick={() => openEditModal(w)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-lg transition-colors"
+                  title="Edit Data Warga"
+                >
+                  <Edit2 className="w-3.5 h-3.5" /> Edit
+                </button>
+                <button
+                  onClick={async () => {
+                    const confirmed = await confirm(
+                      'Hapus Data Warga',
+                      `Yakin ingin menghapus warga *${w.namaKepalaKeluarga}*? (Data transaksi yang terikat mungkin akan kehilangan referensi)`,
+                      'danger'
+                    );
+                    if (confirmed) {
+                      deleteWarga(w.id);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
+                  title="Hapus Warga"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Hapus
+                </button>
+              </div>
+            </div>
+          ))}
+          {displayedWarga.length === 0 && (
+            <div className="p-12 text-center text-gray-450">
+              Belum ada data warga terdaftar.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View (Table) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-gray-50 text-gray-600 font-medium border-b border-gray-100">
               <tr>
@@ -262,7 +332,7 @@ export default function Warga() {
                       onClick={async () => {
                         const confirmed = await confirm(
                           'Hapus Data Warga',
-                          'Yakin ingin menghapus warga ini? (Data transaksi yang terikat mungkin akan kehilangan referensi)',
+                          `Yakin ingin menghapus warga *${w.namaKepalaKeluarga}*? (Data transaksi yang terikat mungkin akan kehilangan referensi)`,
                           'danger'
                         );
                         if (confirmed) {

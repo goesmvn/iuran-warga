@@ -130,6 +130,11 @@ const initDB = () => {
   // Ensure 'Transfer Antar Kas' category always exists
   const insertTransfer = db.prepare('INSERT OR IGNORE INTO categories (id, name, type, defaultNominal, periode, showInPayment) VALUES (?, ?, ?, ?, ?, ?)');
   insertTransfer.run('cat-transfer', 'Transfer Antar Kas', 'Pengeluaran', null, 'Insidental', 0);
+
+  // Ensure 'Koreksi Saldo' categories always exist
+  const insertKoreksi = db.prepare('INSERT OR IGNORE INTO categories (id, name, type, defaultNominal, periode, showInPayment) VALUES (?, ?, ?, ?, ?, ?)');
+  insertKoreksi.run('cat-koreksi-in', 'Koreksi Saldo (Lebih)', 'Pemasukan', null, 'Insidental', 0);
+  insertKoreksi.run('cat-koreksi-out', 'Koreksi Saldo (Kurang)', 'Pengeluaran', null, 'Insidental', 0);
 };
 
 initDB();

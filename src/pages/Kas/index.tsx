@@ -30,6 +30,13 @@ export default function Kas() {
   const { confirm } = useConfirm();
 
   const [isModalSaldoOpen, setIsModalSaldoOpen] = useState(false);
+  const [isModalKoreksiOpen, setIsModalKoreksiOpen] = useState(false);
+
+  // States untuk Koreksi Saldo
+  const [koreksiLocationId, setKoreksiLocationId] = useState('');
+  const [koreksiSaldoFisik, setKoreksiSaldoFisik] = useState('');
+  const [koreksiDate, setKoreksiDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [koreksiDescription, setKoreksiDescription] = useState('Penyesuaian saldo fisik');
   
   const startYear = settings?.start_year || new Date().getFullYear().toString();
 
@@ -49,6 +56,7 @@ export default function Kas() {
     description: 250,
     kas: 150,
     nominal: 150,
+    saldo: 150,
     action: 100
   });
 
@@ -159,6 +167,93 @@ export default function Kas() {
     setIsModalSaldoOpen(false);
   };
 
+  const openModalKoreksi = () => {
+    setKoreksiLocationId(locations[0]?.id || 'loc-default');
+    setKoreksiSaldoFisik('');
+    setKoreksiDate(new Date().toISOString().split("T")[0]);
+    setKoreksiDescription('Koreksi selisih saldo fisik');
+    setIsModalKoreksiOpen(true);
+  };
+
+  const submitKoreksiSaldo = (e: React.FormEvent) => {
+    e.preventDefault();
+    const locId = koreksiLocationId;
+    if (!locId) return;
+
+    // Hitung saldo sistem saat ini untuk kas terpilih
+    const targetKasTxs = transactions.filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === locId);
+    const totalMasuk = targetKasTxs.filter(t => t.type === "Pemasukan").reduce((s, t) => s + t.nominal, 0);
+    const totalKeluar = targetKasTxs.filter(t => t.type === "Pengeluaran").reduce((s, t) => s + t.nominal, 0);
+    const saldoSistem = totalMasuk - totalKeluar;
+
+    const saldoFisikValue = Number(koreksiSaldoFisik.replace(/\D/g, ''));
+    const selisih = saldoFisikValue - saldoSistem;
+
+    if (selisih === 0) {
+      alert("Saldo sistem sudah sama dengan saldo fisik. Tidak perlu koreksi.");
+      setIsModalKoreksiOpen(false);
+      return;
+    }
+
+    if (selisih > 0) {
+      // Selisih positif -> Saldo sistem kurang -> tambah Pemasukan (Koreksi)
+      addTransaction({
+        date: new Date(koreksiDate).toISOString(),
+        categoryId: 'cat-koreksi-in',
+        type: 'Pemasukan',
+        nominal: selisih,
+        description: koreksiDescription || 'Koreksi Saldo (Lebih)',
+        kasLocationId: locId
+      });
+    } else {
+      // Selisih negatif -> Saldo sistem lebih -> tambah Pengeluaran (Koreksi)
+      addTransaction({
+        date: new Date(koreksiDate).toISOString(),
+        categoryId: 'cat-koreksi-out',
+        type: 'Pengeluaran',
+        nominal: Math.abs(selisih),
+        description: koreksiDescription || 'Koreksi Saldo (Kurang)',
+        kasLocationId: locId
+      });
+    }
+
+    setIsModalKoreksiOpen(false);
+  };
+
+  // Ekstrak waktu pembuatan dari id transaksi (format tx-<timestamp>-...)
+  // untuk jadi penentu urutan "jam" saat tanggal sama persis.
+  const getCreatedAt = (tx: Transaction) => {
+    const m = tx.id.match(/^tx-(\d+)/);
+    return m ? Number(m[1]) : 0;
+  };
+
+  // Saldo per lokasi kas (all-time, seluruh riwayat transaksi lokasi tsb)
+  const kasBalances = useMemo(() => {
+    return locations.map(loc => {
+      const txs = transactions.filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === loc.id);
+      const masuk = txs.filter(t => t.type === "Pemasukan").reduce((s, t) => s + t.nominal, 0);
+      const keluar = txs.filter(t => t.type === "Pengeluaran").reduce((s, t) => s + t.nominal, 0);
+      return { ...loc, saldo: masuk - keluar };
+    });
+  }, [locations, transactions]);
+
+  // Saldo berjalan (historikal) per transaksi, khusus saat 1 lokasi kas dipilih.
+  // Dihitung dari seluruh riwayat kas tsb (tidak terpengaruh filter tipe/pencarian)
+  // agar historikal saldonya tetap akurat.
+  const runningBalanceMap = useMemo(() => {
+    if (selectedKas === "Semua") return null;
+    const chron = [...transactions]
+      .filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === selectedKas)
+      .sort((a, b) => a.date.localeCompare(b.date) || getCreatedAt(a) - getCreatedAt(b));
+    const map = new Map<string, number>();
+    let running = 0;
+    chron.forEach(t => {
+      running += t.type === "Pemasukan" ? t.nominal : -t.nominal;
+      map.set(t.id, running);
+    });
+    return map;
+  }, [transactions, selectedKas]);
+
   const getCategoryName = (id: string) =>
     categories.find((c) => c.id === id)?.name || "Unknown";
   const getResidentName = (id?: string) =>
@@ -220,6 +315,11 @@ export default function Kas() {
         case 'date':
           valA = new Date(a.date).getTime();
           valB = new Date(b.date).getTime();
+          if (valA === valB) {
+            const ca = getCreatedAt(a);
+            const cb = getCreatedAt(b);
+            return sortOrder === 'asc' ? ca - cb : cb - ca;
+          }
           break;
         case 'category':
           valA = getCategoryName(a.categoryId).toLowerCase();
@@ -248,8 +348,10 @@ export default function Kas() {
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
 
-      // Fallback to secondary sort by date/time (always desc to prioritize latest)
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
+      // Fallback to secondary sort by date, then by creation time (always desc to prioritize latest)
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return getCreatedAt(b) - getCreatedAt(a);
     });
 
     return result;
@@ -275,12 +377,39 @@ export default function Kas() {
         </div>
         <div className="flex flex-wrap gap-3">
           <button
+            onClick={openModalKoreksi}
+            className="flex items-center gap-2 bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm"
+          >
+            <ArrowRightLeft className="w-4 h-4" /> Koreksi Saldo
+          </button>
+          <button
             onClick={openModalSaldo}
             className="flex items-center gap-2 bg-white text-green-600 border border-green-200 hover:bg-green-50 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" /> Set Saldo Awal
           </button>
         </div>
+      </div>
+
+      {/* Saldo per Lokasi Kas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {kasBalances.map(loc => (
+          <button
+            key={loc.id}
+            type="button"
+            onClick={() => setSelectedKas(prev => prev === loc.id ? "Semua" : loc.id)}
+            className={`text-left p-4 rounded-2xl border shadow-sm transition-colors ${
+              selectedKas === loc.id ? "bg-brand-50 border-brand-300 ring-2 ring-brand-500/20" : "bg-white border-gray-100 hover:border-gray-200"
+            }`}
+          >
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
+              <Landmark className="w-3.5 h-3.5" /> {loc.name}
+            </p>
+            <h4 className={`text-lg font-bold ${loc.saldo >= 0 ? "text-gray-900" : "text-red-600"}`}>
+              Rp {loc.saldo.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h4>
+          </button>
+        ))}
       </div>
 
       {/* Filter & Search Bar */}
@@ -328,7 +457,81 @@ export default function Kas() {
             Riwayat Transaksi Terakhir (Buku Besar)
           </h3>
         </div>
-        <div className="overflow-x-auto relative">
+        {/* Mobile View (Card List) */}
+        <div className="md:hidden divide-y divide-gray-150">
+          {processedTransactions.map((tx) => {
+            const isPemasukan = tx.type === "Pemasukan";
+            return (
+              <div key={tx.id} className="p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-500">
+                    {new Date(tx.date).toLocaleDateString("id-ID", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-black ${isPemasukan ? "text-green-600" : "text-red-600"}`}>
+                      {isPemasukan ? "+" : "-"} Rp {tx.nominal.toLocaleString('id-ID')}
+                    </span>
+                    <button
+                      onClick={async () => {
+                        const txDetail = tx.type === "Pemasukan"
+                          ? `${getResidentName(tx.residentId)} ${tx.periodeBulan ? `(${new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${tx.periodeTahun})` : ''}`
+                          : tx.description;
+                        const confirmed = await confirm(
+                          'Hapus Catatan Transaksi',
+                          `Yakin menghapus transaksi *"${txDetail}"*? Aksi ini akan seketika mengubah laporan arus kas seluruh keuangan.`,
+                          'danger'
+                        );
+                        if (confirmed) {
+                          deleteTransaction(tx.id);
+                        }
+                      }}
+                      className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                      title="Hapus Transaksi"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 text-sm">
+                    {tx.type === "Pemasukan"
+                      ? `${getResidentName(tx.residentId)} ${tx.periodeBulan ? `(${new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${tx.periodeTahun})` : ''}`
+                      : tx.description}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold text-gray-500">
+                  {tx.categoryId === "cat-transfer" ? (
+                    <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700">Transfer</span>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded ${isPemasukan ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      {getCategoryName(tx.categoryId)}
+                    </span>
+                  )}
+                  <span className="px-2 py-0.5 rounded bg-gray-100">
+                    {getLocationName(tx.kasLocationId ?? DEFAULT_KAS_LOCATION_ID)}
+                  </span>
+                  {runningBalanceMap && (
+                    <span className="ml-auto text-gray-700 font-extrabold">
+                      Saldo: Rp {(runningBalanceMap.get(tx.id) ?? 0).toLocaleString('id-ID')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {processedTransactions.length === 0 && (
+            <div className="p-12 text-center text-gray-450">
+              Tidak ada transaksi yang cocok dengan pencarian.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View (Table) */}
+        <div className="hidden md:block overflow-x-auto relative">
           <table className="w-full text-left text-sm whitespace-nowrap table-fixed">
             <thead className="text-gray-500 font-medium bg-gray-50 border-b border-gray-100 select-none">
               <tr>
@@ -362,6 +565,12 @@ export default function Kas() {
                   </div>
                   <div onMouseDown={(e) => startResize('nominal', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-gray-300 active:bg-gray-400 transition-colors" />
                 </th>
+                {runningBalanceMap && (
+                  <th style={{ width: colWidths.saldo }} className="px-6 py-4 text-right relative group">
+                    Saldo Berjalan
+                    <div onMouseDown={(e) => startResize('saldo', e)} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-gray-300 active:bg-gray-400 transition-colors" />
+                  </th>
+                )}
                 <th style={{ width: colWidths.action }} className="px-6 py-4 text-center">
                   Aksi
                 </th>
@@ -420,13 +629,21 @@ export default function Kas() {
                     {tx.type === "Pemasukan" ? "+" : "-"} Rp{" "}
                     {tx.nominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
+                  {runningBalanceMap && (
+                    <td className="px-6 py-4 text-right font-bold text-gray-700 truncate" style={{ width: colWidths.saldo }}>
+                      Rp {(runningBalanceMap.get(tx.id) ?? 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  )}
                   <td className="px-6 py-4 text-center truncate" style={{ width: colWidths.action }}>
                     <div className="flex justify-center gap-2">
                         <button
                           onClick={async () => {
+                            const txDetail = tx.type === "Pemasukan"
+                              ? `${getResidentName(tx.residentId)} ${tx.periodeBulan ? `(${new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${tx.periodeTahun})` : ''}`
+                              : tx.description;
                             const confirmed = await confirm(
                               'Hapus Catatan Transaksi',
-                              'Yakin menghapus catatan transaksi ini? Aksi ini akan seketika mengubah laporan arus kas seluruh keuangan.',
+                              `Yakin menghapus transaksi *"${txDetail}"*? Aksi ini akan seketika mengubah laporan arus kas seluruh keuangan.`,
                               'danger'
                             );
                             if (confirmed) {
@@ -444,7 +661,7 @@ export default function Kas() {
               ))}
               {processedTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
+                  <td colSpan={runningBalanceMap ? 7 : 6} className="px-6 py-16 text-center">
                     <p className="text-gray-500 font-medium text-lg">
                       Tidak ada transaksi yang cocok dengan pencarian.
                     </p>
@@ -509,6 +726,74 @@ export default function Kas() {
               <div className="pt-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
                 <button type="button" onClick={() => setIsModalSaldoOpen(false)} className="px-6 py-3 text-sm font-bold text-gray-600 hover:bg-gray-100 border border-transparent rounded-xl transition-colors">Batal</button>
                 <button type="submit" className="px-8 py-3 text-sm font-bold text-white rounded-xl transition-colors shadow-lg bg-green-600 hover:bg-green-700">Simpan Saldo Awal</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Koreksi Saldo */}
+      {isModalKoreksiOpen && (
+        <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
+          <div
+            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+            onClick={() => setIsModalKoreksiOpen(false)}
+          ></div>
+          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden relative z-10 flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 flex justify-between items-center bg-brand-50 border-b border-brand-100 flex-shrink-0">
+              <h3 className="font-bold text-lg text-brand-900">
+                Koreksi Saldo Kas (Penyesuaian Fisik)
+              </h3>
+              <button type="button" onClick={() => setIsModalKoreksiOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <form onSubmit={submitKoreksiSaldo} className="p-6 overflow-y-auto flex-1 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5">Tanggal Penyesuaian</label>
+                  <input required type="date" value={koreksiDate} onChange={(e) => setKoreksiDate(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-gray-50/50" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5">Pilih Kas yang Dikoreksi</label>
+                  <div className="relative">
+                    <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <select required value={koreksiLocationId} onChange={(e) => setKoreksiLocationId(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-gray-50/50 font-medium text-gray-900">
+                      {locations.map(loc => (
+                        <option key={loc.id} value={loc.id}>{loc.name} {loc.type !== 'Tunai' ? `(${loc.type})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">Nominal Uang Fisik Sebenarnya saat ini (Rp)</label>
+                <input 
+                  required 
+                  type="text" 
+                  value={koreksiSaldoFisik ? Number(koreksiSaldoFisik.replace(/\D/g, '')).toLocaleString('id-ID') : ""} 
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/\D/g, "");
+                    setKoreksiSaldoFisik(raw);
+                  }} 
+                  className="w-full px-4 py-3 rounded-xl border-2 border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-500/20 focus:border-brand-500 text-brand-900 bg-brand-50/30 shadow-sm text-xl font-bold" 
+                  placeholder="Misal: 150.000" 
+                />
+                <p className="text-xs text-gray-500 mt-1.5">Sistem akan secara otomatis menghitung selisih dengan saldo berjalan dan membuatkan 1 baris transaksi penyesuaian (Pemasukan/Pengeluaran).</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">Alasan / Keterangan Koreksi</label>
+                <input type="text" value={koreksiDescription} onChange={(e) => setKoreksiDescription(e.target.value)} placeholder="Contoh: Penyesuaian karena selisih hitung kas laci" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-gray-50/50" />
+              </div>
+
+              <div className="pt-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
+                <button type="button" onClick={() => setIsModalKoreksiOpen(false)} className="px-6 py-3 text-sm font-bold text-gray-600 hover:bg-gray-100 border border-transparent rounded-xl transition-colors">Batal</button>
+                <button type="submit" className="px-8 py-3 text-sm font-bold text-white rounded-xl transition-colors shadow-lg bg-brand-600 hover:bg-brand-700">Simpan Koreksi Saldo</button>
               </div>
             </form>
           </div>

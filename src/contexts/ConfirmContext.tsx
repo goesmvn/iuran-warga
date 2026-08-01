@@ -197,7 +197,16 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                     {title}
                   </h3>
                   <p className="text-gray-500 leading-relaxed text-sm whitespace-pre-line">
-                    {message}
+                    {(() => {
+                      if (!message) return null;
+                      const parts = message.split(/(\*[^*]+\*)/g);
+                      return parts.map((part, idx) => {
+                        if (part.startsWith('*') && part.endsWith('*')) {
+                          return <strong key={idx} className="font-black text-gray-900">{part.slice(1, -1)}</strong>;
+                        }
+                        return part;
+                      });
+                    })()}
                   </p>
                 </div>
 

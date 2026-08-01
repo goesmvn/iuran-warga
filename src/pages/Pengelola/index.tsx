@@ -45,6 +45,16 @@ export default function Pengelola() {
   const [localNominalIuran, setLocalNominalIuran] = useState('');
   const [localRekeningTujuan, setLocalRekeningTujuan] = useState('');
 
+  // States untuk Google Drive Auto Backup
+  const [backupInterval, setBackupInterval] = useState('Nonaktif');
+  const [gdriveBackupEnabled, setGdriveBackupEnabled] = useState(false);
+  const [gdriveFolderId, setGdriveFolderId] = useState('');
+  const [gdriveCredentials, setGdriveCredentials] = useState('');
+  const [hasCredentials, setHasCredentials] = useState(false);
+  const [lastBackupTime, setLastBackupTime] = useState<number | null>(null);
+  const [isSavingBackupSettings, setIsSavingBackupSettings] = useState(false);
+  const [isTestingBackup, setIsTestingBackup] = useState(false);
+
   const [isRestoring, setIsRestoring] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -83,7 +93,7 @@ export default function Pengelola() {
 
     const confirmed = await confirm(
       'Restore Database',
-      'Peringatan: Me-restore database akan menimpa seluruh data yang ada saat ini. Yakin ingin melanjutkan?',
+      '*Peringatan: Me-restore database akan menimpa seluruh data yang ada saat ini.* Yakin ingin melanjutkan?',
       'danger'
     );
     if (!confirmed) {
@@ -149,6 +159,75 @@ export default function Pengelola() {
     
     setIsUpdatingSetting(false);
     if (changed) await customAlert("Pengaturan Disimpan", "Pengaturan berhasil disimpan.", "success");
+  };
+
+  const loadBackupSettings = async () => {
+    try {
+      const res = await apiFetch('/api/backup-settings');
+      if (res.ok) {
+        const data = await res.json();
+        setBackupInterval(data.backup_interval);
+        setGdriveBackupEnabled(data.gdrive_backup_enabled);
+        setGdriveFolderId(data.gdrive_folder_id);
+        setHasCredentials(data.has_credentials);
+        setLastBackupTime(data.last_backup_time);
+      }
+    } catch (e) {
+      console.error('Gagal memuat setelan backup', e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'backup') {
+      loadBackupSettings();
+    }
+  }, [activeTab]);
+
+  const handleSaveBackupSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingBackupSettings(true);
+    try {
+      const res = await apiFetch('/api/backup-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backup_interval: backupInterval,
+          gdrive_backup_enabled: gdriveBackupEnabled,
+          gdrive_folder_id: gdriveFolderId,
+          ...(gdriveCredentials ? { gdrive_credentials: gdriveCredentials } : {})
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await customAlert('Backup Disimpan', 'Konfigurasi backup otomatis berhasil diperbarui.', 'success');
+        setGdriveCredentials('');
+        loadBackupSettings();
+      } else {
+        await customAlert('Simpan Gagal', data.error || 'Gagal menyimpan konfigurasi.', 'error');
+      }
+    } catch (e) {
+      await customAlert('Error', 'Terjadi kesalahan saat menghubungi server.', 'error');
+    } finally {
+      setIsSavingBackupSettings(false);
+    }
+  };
+
+  const handleTestBackup = async () => {
+    setIsTestingBackup(true);
+    try {
+      const res = await apiFetch('/api/backup-test', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        await customAlert('Backup Berhasil', 'Database berhasil diunggah ke Google Drive!', 'success');
+        setLastBackupTime(data.last_backup_time);
+      } else {
+        await customAlert('Test Backup Gagal', data.error || 'Gagal melakukan tes backup.', 'error');
+      }
+    } catch (e) {
+      await customAlert('Error', 'Terjadi kesalahan sistem.', 'error');
+    } finally {
+      setIsTestingBackup(false);
+    }
   };
 
   if (currentUser?.role !== 'Admin') {
@@ -234,6 +313,7 @@ export default function Pengelola() {
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-gray-50/50 text-gray-500 font-medium border-b border-gray-100">
                 <tr>
@@ -267,7 +347,7 @@ export default function Pengelola() {
                       {currentUser.id !== u.id && u.username !== 'admin' && (
                         <button
                           onClick={async () => {
-                            const confirmed = await confirm('Hapus Hak Akses', 'Yakin menghapus hak akses pengguna ini?', 'danger');
+                            const confirmed = await confirm('Hapus Hak Akses', `Yakin menghapus hak akses pengguna *${u.name}*?`, 'danger');
                             if (confirmed) deleteUser(u.id);
                           }}
                           className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -281,6 +361,7 @@ export default function Pengelola() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -521,6 +602,100 @@ export default function Pengelola() {
                 </button>
               </div>
             </div>
+
+            {/* Google Drive Auto Backup Settings */}
+            <form onSubmit={handleSaveBackupSettings} className="mt-6 border-t border-gray-100 pt-6 space-y-6">
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-gray-400" />
+                <h3 className="font-bold text-gray-800">Auto Backup Google Drive</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Interval Backup Otomatis</label>
+                  <select
+                    value={backupInterval}
+                    onChange={e => setBackupInterval(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="Nonaktif">Nonaktif</option>
+                    <option value="Harian">Harian</option>
+                    <option value="Mingguan">Mingguan</option>
+                    <option value="Bulanan">Bulanan</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Status Backup GDrive</label>
+                  <label className="flex items-center gap-2 mt-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={gdriveBackupEnabled}
+                      onChange={e => setGdriveBackupEnabled(e.target.checked)}
+                      className="rounded text-[#f43f5e] focus:ring-[#f43f5e] w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Aktifkan Unggah Google Drive</span>
+                  </label>
+                </div>
+              </div>
+
+              {gdriveBackupEnabled && (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Kredensial Google Service Account (JSON Key)</label>
+                    <textarea
+                      value={gdriveCredentials}
+                      onChange={e => setGdriveCredentials(e.target.value)}
+                      placeholder={hasCredentials ? '•••••••• Sudah Ada Kredensial Google Service Account Terunggah •••••••• (Ketik/Paste di sini untuk menimpa key baru)' : 'Tempelkan seluruh isi file JSON kredensial Google Service Account Anda di sini...'}
+                      rows={5}
+                      className={`${inputClass} font-mono text-xs`}
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Langkah: Buat Service Account di <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-semibold">Google Cloud Console</a> &rarr; Buat & Unduh Kunci JSON Key &rarr; Share folder Google Drive tujuan ke email Service Account tersebut.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Folder ID Google Drive (Opsional)</label>
+                    <input
+                      type="text"
+                      value={gdriveFolderId}
+                      onChange={e => setGdriveFolderId(e.target.value)}
+                      placeholder="Folder ID tempat menaruh backup (Biarkan kosong untuk root drive)"
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-100">
+                <div className="text-xs text-gray-500">
+                  {lastBackupTime ? (
+                    <span>Backup Terakhir: <strong>{new Date(lastBackupTime).toLocaleString('id-ID')}</strong></span>
+                  ) : (
+                    <span>Belum ada riwayat backup otomatis dijalankan.</span>
+                  )}
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  {gdriveBackupEnabled && hasCredentials && (
+                    <button
+                      type="button"
+                      onClick={handleTestBackup}
+                      disabled={isTestingBackup}
+                      className="flex-1 sm:flex-none px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 text-gray-750 font-bold rounded-xl text-xs transition-colors"
+                    >
+                      {isTestingBackup ? 'Mengunggah...' : 'Tes Backup Sekarang'}
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isSavingBackupSettings}
+                    className="flex-1 sm:flex-none px-5 py-2 bg-[#f43f5e] hover:bg-[#e11d48] disabled:bg-gray-300 text-white font-bold rounded-xl text-xs transition-colors shadow-sm"
+                  >
+                    {isSavingBackupSettings ? 'Menyimpan...' : 'Simpan Setelan'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

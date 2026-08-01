@@ -105,7 +105,7 @@ export default function LokasiKas() {
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      const confirmed = await confirm('Hapus Rekening/Kas', `Yakin menghapus Lokasi Kas: ${loc.name}? Transaksi lama mungkin akan kehilangan referensi nama letaknya.`, 'danger');
+                      const confirmed = await confirm('Hapus Rekening/Kas', `Yakin menghapus Lokasi Kas: *${loc.name}*? Transaksi lama mungkin akan kehilangan referensi nama letaknya.`, 'danger');
                       if (confirmed) deleteLocation(loc.id);
                     }}
                     className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"

@@ -207,7 +207,51 @@ export default function Transfer() {
             {groupedTransfers.length} transfer
           </span>
         </div>
-        <div className="overflow-x-auto">
+        {/* Mobile View (Card List) */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {groupedTransfers.map((group) => {
+            const fromLoc = group.out.kasLocationId;
+            const toLoc = group.out.transferToKasLocationId || group.in?.kasLocationId;
+            return (
+              <div key={group.out.transferId} className="p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-500">
+                    {new Date(group.out.date).toLocaleDateString("id-ID", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                  <span className="text-sm font-black text-amber-600">
+                    Rp {group.out.nominal.toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="px-2 py-0.5 rounded font-bold bg-red-50 text-red-700">
+                    {getLocationName(fromLoc)}
+                  </span>
+                  <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="px-2 py-0.5 rounded font-bold bg-green-50 text-green-700">
+                    {getLocationName(toLoc)}
+                  </span>
+                </div>
+                {group.out.description && (
+                  <p className="text-xs text-gray-500 italic mt-0.5">
+                    "{group.out.description}"
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          {groupedTransfers.length === 0 && (
+            <div className="p-12 text-center text-gray-450">
+              Belum ada riwayat transfer.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View (Table) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="text-gray-500 font-medium bg-gray-50 border-b border-gray-100">
               <tr>

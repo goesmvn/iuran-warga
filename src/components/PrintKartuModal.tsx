@@ -128,7 +128,7 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
             {/* Kop Surat */}
             <div className={`flex items-center justify-between border-b-2 border-gray-800 ${isThermal ? 'pb-4 mb-6' : 'pb-6 mb-8'}`}>
                <div className={`flex items-center ${isThermal ? 'gap-3' : 'gap-6'}`}>
-                  <div className={`grayscale brightness-0 print:grayscale-0 print:brightness-100 ${isThermal ? 'w-10 h-10' : 'w-20 h-20'}`}>
+                  <div className={`${isThermal ? 'w-10 h-10' : 'w-20 h-20'}`}>
                      <JepunIcon className="w-full h-full" />
                   </div>
                   <div>
