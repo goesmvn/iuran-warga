@@ -275,9 +275,10 @@ export default function Kas() {
     }
   };
 
-  // Filtered & Sorted Transactions
+  // Filtered & Sorted Transactions (Buku Besar)
+  // Hanya menampilkan transaksi dengan nominal > 0 (koreksi rekap Rp 0 hanya ada di Laporan Rekap, tidak masuk Buku Besar)
   const processedTransactions = useMemo(() => {
-    let result = [...transactions];
+    let result = transactions.filter(t => t.nominal > 0);
 
     // Filter Type
     if (selectedType !== "Semua") {

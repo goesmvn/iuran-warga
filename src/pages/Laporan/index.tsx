@@ -1662,10 +1662,24 @@ export default function Laporan() {
             <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col md:flex-row gap-6 min-h-0">
               {/* Kolom Kiri: Riwayat Pembayaran & Cepat Centang */}
               <div className={`flex flex-col w-full md:w-1/2 md:h-full min-h-0 space-y-4 ${corrModalTab === 'quick_riwayat' ? 'flex' : 'hidden md:flex'}`}>
-                {/* Mode Cepat Centang Matriks */}
-                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex-shrink-0">
-                  <h4 className="font-bold text-blue-900 text-xs uppercase tracking-wider mb-2">Cepat Centang / Lunasi Periode</h4>
-                  <p className="text-[10px] text-blue-700 mb-3 leading-relaxed">Centang bulan untuk melunasi instan tanpa dana masuk kas (Nominal Rp 0). Hapus centang untuk menghapus catatan transaksi bulan tersebut.</p>
+                  {/* Mode Cepat Centang Matriks */}
+                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex-shrink-0 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-blue-900 text-xs uppercase tracking-wider">Cepat Centang / Lunasi Periode</h4>
+                    </div>
+                    <p className="text-[10px] text-blue-700 leading-relaxed">
+                      Klik bulan untuk menandai Lunas/Batal. Bila dicentang <strong>Simpan sebagai Dana Masuk Kas</strong>, pembayaran dengan nominal iuran akan masuk ke Buku Besar. Bila tidak dicentang, pembayaran tercatat lunas rekap (Rp 0) tanpa mempengaruhi kas.
+                    </p>
+
+                    <label className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded-lg border border-blue-200 shadow-sm">
+                      <input 
+                        type="checkbox"
+                        checked={corrSaveToKas}
+                        onChange={(e) => setCorrSaveToKas(e.target.checked)}
+                        className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+                      />
+                      <span className="text-xs font-bold text-blue-900">Simpan sebagai Dana Masuk Kas (Buku Besar)</span>
+                    </label>
                   
                   <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
@@ -1694,15 +1708,26 @@ export default function Laporan() {
                                 deleteTransaction(matchedTx.id);
                               }
                             } else {
-                              // Tambah instan (gunakan tarif standar kategori jika ada, atau minimal 1 jika tanpa nominal nominal Rp 0 ditolak backend API)
                               if (!defaultCat) return;
-                              const defaultNominal = defaultCat.defaultNominal || 1;
+                              const nomVal = corrSaveToKas ? (defaultCat.defaultNominal || 0) : 0;
+                              
+                              const isSaveKas = corrSaveToKas && nomVal > 0;
+                              const confirmed = await confirm(
+                                isSaveKas ? 'Simpan ke Buku Besar' : 'Simpan Hanya Rekap',
+                                isSaveKas 
+                                  ? `Pelunasan *Bulan ${new Date(2000, m - 1).toLocaleString("id-ID", { month: "long" })}* sebesar *Rp ${nomVal.toLocaleString("id-ID")}* akan **DISIMPAN KE BUKU BESAR & KAS**. Lanjutkan?`
+                                  : `Pelunasan *Bulan ${new Date(2000, m - 1).toLocaleString("id-ID", { month: "long" })}* akan dicatat **HANYA REKAP (Rp 0)** (TIDAK disimpan ke Buku Besar). Lanjutkan?`,
+                                isSaveKas ? 'info' : 'warning'
+                              );
+
+                              if (!confirmed) return;
+
                               addTransaction({
                                 date: new Date().toISOString(),
                                 categoryId: defaultCat.id,
                                 type: "Pemasukan",
-                                nominal: defaultNominal,
-                                description: `Koreksi Rekap (Matriks)`,
+                                nominal: nomVal,
+                                description: isSaveKas ? `Pembayaran ${defaultCat.name} (Koreksi)` : `Koreksi Rekap (Matriks)`,
                                 kasLocationId: kasLocations[0]?.id || "default",
                                 residentId: activeCorrectionResident.id,
                                 periodeBulan: m,
