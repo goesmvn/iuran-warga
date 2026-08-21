@@ -1773,8 +1773,8 @@ export default function Laporan() {
                                 {new Date(tx.date).toLocaleDateString("id-ID")}
                               </span>
                               {tx.nominal === 0 && (
-                                <span className="font-semibold text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-250">
-                                  Hanya Rekap
+                                <span className="font-semibold text-[9px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded border border-green-250">
+                                  Centang
                                 </span>
                               )}
                             </div>
