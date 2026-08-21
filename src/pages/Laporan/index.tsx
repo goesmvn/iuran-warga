@@ -1365,13 +1365,13 @@ export default function Laporan() {
             </div>
 
             <div className="hidden md:block overflow-x-auto print:overflow-visible print:!block">
-              <table className="w-full text-left font-mono text-xs whitespace-nowrap border-collapse">
+              <table className="w-full text-left font-mono text-xs whitespace-nowrap border-collapse print:text-[10px]">
                 <thead className="bg-gray-100 border-b-2 border-gray-200 print:bg-gray-200">
                   <tr>
-                    <th className="px-4 py-3 sticky left-0 z-10 bg-gray-100 print:bg-gray-200 border-r border-gray-200 w-12 text-center uppercase tracking-widest text-gray-500 font-bold">Blok</th>
-                    <th className="px-4 py-3 sticky left-12 z-10 bg-gray-100 print:bg-gray-200 border-r border-gray-200 uppercase tracking-widest text-gray-500 font-bold">Nama Warga</th>
+                    <th className="px-4 py-3 sticky left-0 z-10 bg-gray-100 print:static print:bg-transparent print:px-2 print:py-1.5 border-r border-gray-200 w-12 text-center uppercase tracking-widest text-gray-500 font-bold">Blok</th>
+                    <th className="px-4 py-3 sticky left-12 z-10 bg-gray-100 print:static print:bg-transparent print:px-2 print:py-1.5 border-r border-gray-200 uppercase tracking-widest text-gray-500 font-bold">Nama Warga</th>
                     {["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"].map(m => (
-                      <th key={m} className="px-3 py-3 border-r border-gray-200 text-center uppercase tracking-widest text-gray-500 font-bold">
+                      <th key={m} className="px-3 py-3 print:px-1.5 print:py-1.5 border-r border-gray-200 text-center uppercase tracking-widest text-gray-500 font-bold">
                         {m}
                       </th>
                     ))}
@@ -1383,10 +1383,10 @@ export default function Laporan() {
                 <tbody>
                   {rekapitulasiList.map(w => (
                     <tr key={w.id} className={`border-b border-gray-100 hover:bg-gray-50 ${w.status === 'Pindah' ? 'opacity-50' : ''}`}>
-                      <td className="px-4 py-2 sticky left-0 z-10 bg-white border-r border-gray-100/50 text-center font-bold text-gray-900 group-hover:bg-gray-50">
+                      <td className="px-4 py-2 sticky left-0 z-10 bg-white print:static print:bg-transparent print:px-2 print:py-1 border-r border-gray-100/50 text-center font-bold text-gray-900 group-hover:bg-gray-50">
                         {w.nomorRumah}
                       </td>
-                      <td className="px-4 py-2 sticky left-12 z-10 bg-white border-r border-gray-100/50 font-bold text-gray-700 truncate max-w-[150px] group-hover:bg-gray-50">
+                      <td className="px-4 py-2 sticky left-12 z-10 bg-white print:static print:bg-transparent print:px-2 print:py-1 border-r border-gray-100/50 font-bold text-gray-700 truncate max-w-[150px] print:max-w-none group-hover:bg-gray-50">
                         {w.namaKepalaKeluarga}
                         {w.status === 'Pindah' && <span className="ml-2 text-[9px] font-normal italic text-red-500">(Pindah)</span>}
                       </td>
