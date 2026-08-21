@@ -1343,7 +1343,6 @@ export default function Laporan() {
                       const m = idx + 1;
                       const txInfo = w.paidMonthsMap?.get(m);
                       const isHadir = !!txInfo;
-                      const isZeroNominal = isHadir && txInfo.nominal === 0;
                       return (
                         <button
                           key={m}
