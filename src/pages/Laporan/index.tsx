@@ -537,6 +537,26 @@ export default function Laporan() {
 
   const canPrint = activeTab === "Tahunan" || activeTab === "ArusKas" || activeTab === "Bulanan" || activeTab === "Rekapitulasi" || activeTab === "Tunggakan" || activeTab === "Pertanggal";
 
+  const handlePrintPage = (orientation?: 'portrait' | 'landscape') => {
+    const styleId = 'dynamic-print-orientation';
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+
+    if (orientation) {
+      styleEl.innerHTML = `@media print { @page { size: A4 ${orientation}; margin: 1cm; } }`;
+    } else {
+      styleEl.innerHTML = `@media print { @page { size: auto; margin: 1cm; } }`;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto print:max-w-none print:w-full print:m-0">
       <div className="print:hidden flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
@@ -741,12 +761,25 @@ export default function Laporan() {
             </button>
           )}
           {canPrint && (
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-2 text-brand-700 bg-brand-50 hover:bg-brand-100 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors border border-brand-200 shadow-sm"
-            >
-              <Printer className="w-4 h-4" /> Cetak / Print
-            </button>
+            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => handlePrintPage('portrait')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Cetak format Tegak (Portrait)"
+              >
+                <Printer className="w-3.5 h-3.5 text-gray-500" /> Cetak Portrait
+              </button>
+              <div className="w-px h-4 bg-gray-200"></div>
+              <button
+                type="button"
+                onClick={() => handlePrintPage('landscape')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-lg transition-colors"
+                title="Cetak format Mendatar (Landscape)"
+              >
+                <Printer className="w-3.5 h-3.5 text-brand-600" /> Cetak Landscape
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -63,7 +63,7 @@
       print-color-adjust: exact !important;
     }
     @page {
-      size: A4 landscape;
+      size: auto;
       margin: 1cm;
     }
   }
