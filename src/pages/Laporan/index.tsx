@@ -1356,7 +1356,7 @@ export default function Laporan() {
                           }`}
                         >
                           <span>{label}</span>
-                          <span>{isHadir ? (isZeroNominal ? 'K' : '✓') : '-'}</span>
+                          <span>{isHadir ? '✓' : '-'}</span>
                         </button>
                       );
                     })}
@@ -1408,7 +1408,7 @@ export default function Laporan() {
                                 onClick={() => handleOpenCorrection(w)}
                                 className={`cursor-pointer inline-flex w-5 h-5 items-center justify-center rounded-sm font-bold text-xs ring-1 transition-colors ${isZeroNominal ? 'bg-blue-50 text-blue-700 ring-blue-200/50 hover:bg-blue-150' : 'bg-green-100 text-green-700 ring-green-200/50 hover:bg-green-200'}`}
                               >
-                                {isZeroNominal ? 'K' : '✓'}
+                                ✓
                               </span>
                             ) : (
                               <span 
