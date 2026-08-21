@@ -139,9 +139,7 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
                      {settings['alamat'] && !isThermal && (
                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug max-w-xs">{settings['alamat']}</p>
                      )}
-                     {!settings['nama_organisasi'] && !settings['nama_desa'] && (
-                       <p className={`${isThermal ? 'text-xs' : 'text-base font-medium'} text-gray-600`}>Buku Kontrol Kas & Iuran Warga</p>
-                     )}
+                     <p className={`${isThermal ? 'text-xs' : 'text-sm font-semibold'} text-blue-700 mt-1 print:text-gray-800`}>BUKTI / KARTU PEMBAYARAN IURAN WARGA</p>
                   </div>
                </div>
                {!isThermal && (
