@@ -1351,7 +1351,7 @@ export default function Laporan() {
                           onClick={() => handleOpenCorrection(w)}
                           className={`flex flex-col items-center justify-center py-1.5 rounded-md text-[10px] font-bold ring-1 transition-colors ${
                             isHadir
-                              ? (isZeroNominal ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-green-100 text-green-700 ring-green-200')
+                              ? 'bg-green-100 text-green-700 ring-green-200'
                               : 'bg-gray-50 text-gray-350 ring-gray-200'
                           }`}
                         >
@@ -1406,7 +1406,7 @@ export default function Laporan() {
                               <span 
                                 title={tooltipText}
                                 onClick={() => handleOpenCorrection(w)}
-                                className={`cursor-pointer inline-flex w-5 h-5 items-center justify-center rounded-sm font-bold text-xs ring-1 transition-colors ${isZeroNominal ? 'bg-blue-50 text-blue-700 ring-blue-200/50 hover:bg-blue-150' : 'bg-green-100 text-green-700 ring-green-200/50 hover:bg-green-200'}`}
+                                className="cursor-pointer inline-flex w-5 h-5 items-center justify-center rounded-sm font-bold text-xs ring-1 transition-colors bg-green-100 text-green-700 ring-green-200/50 hover:bg-green-200"
                               >
                                 ✓
                               </span>
