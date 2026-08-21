@@ -1303,7 +1303,7 @@ export default function Laporan() {
       )}
 
       {activeTab === "Rekapitulasi" && (
-        <div className="print:m-0">
+        <div className="print:m-0 print:w-full">
           <PrintHeader title="Rekapitulasi Iuran Warga" subtitle={`Tahun ${filterYear}`} />
           <div className="bg-white rounded-2xl print:rounded-none shadow-sm print:shadow-none border border-gray-200 print:border-none overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 print:hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1364,14 +1364,14 @@ export default function Laporan() {
               ))}
             </div>
 
-            <div className="hidden md:block overflow-x-auto print:overflow-visible print:!block">
-              <table className="w-full text-left font-mono text-xs whitespace-nowrap border-collapse print:text-[10px]">
+            <div className="hidden md:block overflow-x-auto print:overflow-visible print:!block print:w-full">
+              <table className="w-full text-left font-mono text-xs whitespace-nowrap border-collapse print:table-fixed print:w-full print:text-[9px]">
                 <thead className="bg-gray-100 border-b-2 border-gray-200 print:bg-gray-200">
                   <tr>
-                    <th className="px-4 py-3 sticky left-0 z-10 bg-gray-100 print:static print:bg-transparent print:px-2 print:py-1.5 border-r border-gray-200 w-12 text-center uppercase tracking-widest text-gray-500 font-bold">Blok</th>
-                    <th className="px-4 py-3 sticky left-12 z-10 bg-gray-100 print:static print:bg-transparent print:px-2 print:py-1.5 border-r border-gray-200 uppercase tracking-widest text-gray-500 font-bold">Nama Warga</th>
+                    <th className="px-4 py-3 sticky left-0 z-10 bg-gray-100 print:static print:bg-transparent print:px-1 print:py-1 border-r border-gray-200 w-12 print:w-[6%] text-center uppercase tracking-widest text-gray-500 font-bold">Blok</th>
+                    <th className="px-4 py-3 sticky left-12 z-10 bg-gray-100 print:static print:bg-transparent print:px-1 print:py-1 border-r border-gray-200 uppercase tracking-widest text-gray-500 font-bold print:w-[22%]">Nama Warga</th>
                     {["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"].map(m => (
-                      <th key={m} className="px-3 py-3 print:px-1.5 print:py-1.5 border-r border-gray-200 text-center uppercase tracking-widest text-gray-500 font-bold">
+                      <th key={m} className="px-3 py-3 print:px-0.5 print:py-1 border-r border-gray-200 text-center uppercase tracking-widest text-gray-500 font-bold print:w-[6%]">
                         {m}
                       </th>
                     ))}
@@ -1383,10 +1383,10 @@ export default function Laporan() {
                 <tbody>
                   {rekapitulasiList.map(w => (
                     <tr key={w.id} className={`border-b border-gray-100 hover:bg-gray-50 ${w.status === 'Pindah' ? 'opacity-50' : ''}`}>
-                      <td className="px-4 py-2 sticky left-0 z-10 bg-white print:static print:bg-transparent print:px-2 print:py-1 border-r border-gray-100/50 text-center font-bold text-gray-900 group-hover:bg-gray-50">
+                      <td className="px-4 py-2 sticky left-0 z-10 bg-white print:static print:bg-transparent print:px-1 print:py-0.5 border-r border-gray-100/50 text-center font-bold text-gray-900 group-hover:bg-gray-50">
                         {w.nomorRumah}
                       </td>
-                      <td className="px-4 py-2 sticky left-12 z-10 bg-white print:static print:bg-transparent print:px-2 print:py-1 border-r border-gray-100/50 font-bold text-gray-700 truncate max-w-[150px] print:max-w-none group-hover:bg-gray-50">
+                      <td className="px-4 py-2 sticky left-12 z-10 bg-white print:static print:bg-transparent print:px-1 print:py-0.5 border-r border-gray-100/50 font-bold text-gray-700 truncate max-w-[150px] print:max-w-none print:whitespace-normal group-hover:bg-gray-50">
                         {w.namaKepalaKeluarga}
                         {w.status === 'Pindah' && <span className="ml-2 text-[9px] font-normal italic text-red-500">(Pindah)</span>}
                       </td>
@@ -1400,12 +1400,12 @@ export default function Laporan() {
                           : "Belum Bayar";
                         
                         return (
-                          <td key={m} className="px-2 py-2 border-r border-gray-100/50 text-center">
+                          <td key={m} className="px-2 py-2 print:px-0.5 print:py-0.5 border-r border-gray-100/50 text-center">
                             {isHadir ? (
                               <span 
                                 title={tooltipText}
                                 onClick={() => handleOpenCorrection(w)}
-                                className="cursor-pointer inline-flex w-5 h-5 items-center justify-center rounded-sm font-bold text-xs ring-1 transition-colors bg-green-100 text-green-700 ring-green-200/50 hover:bg-green-200"
+                                className="cursor-pointer inline-flex w-5 h-5 print:w-4 print:h-4 items-center justify-center rounded-sm font-bold text-xs print:text-[10px] ring-1 transition-colors bg-green-100 text-green-700 ring-green-200/50 hover:bg-green-200"
                               >
                                 ✓
                               </span>
@@ -1413,7 +1413,7 @@ export default function Laporan() {
                               <span 
                                 title="Belum Bayar - Klik untuk Koreksi" 
                                 onClick={() => handleOpenCorrection(w)}
-                                className="text-gray-350 hover:text-[#f43f5e] cursor-pointer inline-block w-5 h-5 font-bold transition-all"
+                                className="text-gray-350 hover:text-[#f43f5e] cursor-pointer inline-block w-5 h-5 print:w-4 print:h-4 font-bold transition-all text-xs print:text-[10px]"
                               >
                                 -
                               </span>
