@@ -289,7 +289,9 @@ export default function Pembayaran() {
        const cat = categories.find(c => c.id === cid);
        const isTahunan = cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
        const isPeriodic = periodicCategories.includes(cid) && !isTahunan;
-       const nom = selectedCategories[cid];
+       const nom = Number(selectedCategories[cid] || 0);
+
+       if (nom <= 0) return;
 
        if (isTahunan) {
             // Cek apakah tahun terpilih sudah lunas/terisi

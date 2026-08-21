@@ -186,6 +186,11 @@ export default function Kas() {
     const totalKeluar = targetKasTxs.filter(t => t.type === "Pengeluaran").reduce((s, t) => s + t.nominal, 0);
     const saldoSistem = totalMasuk - totalKeluar;
 
+    if (koreksiSaldoFisik === '') {
+      alert("Masukkan nominal saldo fisik.");
+      return;
+    }
+
     const saldoFisikValue = Number(koreksiSaldoFisik.replace(/\D/g, ''));
     const selisih = saldoFisikValue - saldoSistem;
 
@@ -751,7 +756,7 @@ export default function Kas() {
               </button>
             </div>
             
-            <form onSubmit={submitKoreksiSaldo} className="p-6 overflow-y-auto flex-1 space-y-6">
+            <form onSubmit={submitKoreksiSaldo} className="p-6 overflow-y-auto space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1.5">Tanggal Penyesuaian</label>
@@ -791,7 +796,7 @@ export default function Kas() {
                 <input type="text" value={koreksiDescription} onChange={(e) => setKoreksiDescription(e.target.value)} placeholder="Contoh: Penyesuaian karena selisih hitung kas laci" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-gray-50/50" />
               </div>
 
-              <div className="pt-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
+              <div className="pt-6 border-t border-gray-100 flex justify-end gap-3 bg-white">
                 <button type="button" onClick={() => setIsModalKoreksiOpen(false)} className="px-6 py-3 text-sm font-bold text-gray-600 hover:bg-gray-100 border border-transparent rounded-xl transition-colors">Batal</button>
                 <button type="submit" className="px-8 py-3 text-sm font-bold text-white rounded-xl transition-colors shadow-lg bg-brand-600 hover:bg-brand-700">Simpan Koreksi Saldo</button>
               </div>

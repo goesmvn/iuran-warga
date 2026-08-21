@@ -1694,13 +1694,14 @@ export default function Laporan() {
                                 deleteTransaction(matchedTx.id);
                               }
                             } else {
-                              // Tambah instan Rp 0
+                              // Tambah instan (gunakan tarif standar kategori jika ada, atau minimal 1 jika tanpa nominal nominal Rp 0 ditolak backend API)
                               if (!defaultCat) return;
+                              const defaultNominal = defaultCat.defaultNominal || 1;
                               addTransaction({
                                 date: new Date().toISOString(),
                                 categoryId: defaultCat.id,
                                 type: "Pemasukan",
-                                nominal: 0,
+                                nominal: defaultNominal,
                                 description: `Koreksi Rekap (Matriks)`,
                                 kasLocationId: kasLocations[0]?.id || "default",
                                 residentId: activeCorrectionResident.id,
