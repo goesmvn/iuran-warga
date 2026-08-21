@@ -4,6 +4,7 @@ import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
 import { useKasLocation, DEFAULT_KAS_LOCATION_ID } from "../../hooks/useKasLocation";
 import { useSettings } from "../../hooks/useSettings";
+import { ReceiptModal, type ReceiptData } from "../../components/ReceiptModal";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -13,7 +14,8 @@ import {
   Search,
   ArrowUpDown,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Printer
 } from "lucide-react";
 import type { Transaction } from "../../types";
 import { useConfirm } from "../../contexts/ConfirmContext";
@@ -28,6 +30,37 @@ export default function Kas() {
   const { locations } = useKasLocation();
   const { settings } = useSettings();
   const { confirm } = useConfirm();
+
+  const [printReceiptData, setPrintReceiptData] = useState<ReceiptData | null>(null);
+
+  const handlePrintReceipt = (tx: Transaction) => {
+    const resident = warga.find((w) => w.id === tx.residentId);
+    const cat = categories.find((c) => c.id === tx.categoryId);
+    const kasLoc = locations.find((l) => l.id === tx.kasLocationId);
+
+    let titleItem = cat?.name || "Pembayaran Iuran";
+    if (tx.periodeBulan && tx.periodeTahun) {
+      const monthName = new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "short" });
+      titleItem += ` [${monthName} ${tx.periodeTahun}]`;
+    } else if (tx.periodeTahun) {
+      titleItem += ` [Tahun ${tx.periodeTahun}]`;
+    }
+
+    setPrintReceiptData({
+      date: tx.date,
+      residentName: resident?.namaKepalaKeluarga || "Warga",
+      residentBlock: resident?.nomorRumah || "-",
+      items: [
+        {
+          title: titleItem,
+          subTotal: tx.nominal,
+        },
+      ],
+      total: tx.nominal,
+      kasName: kasLoc?.name || "Tunai",
+      transactionId: tx.id.replace(/^tx-/, "TRX-"),
+    });
+  };
 
   const [isModalSaldoOpen, setIsModalSaldoOpen] = useState(false);
   const [isModalKoreksiOpen, setIsModalKoreksiOpen] = useState(false);
@@ -481,25 +514,36 @@ export default function Kas() {
                     <span className={`text-sm font-black ${isPemasukan ? "text-green-600" : "text-red-600"}`}>
                       {isPemasukan ? "+" : "-"} Rp {tx.nominal.toLocaleString('id-ID')}
                     </span>
-                    <button
-                      onClick={async () => {
-                        const txDetail = tx.type === "Pemasukan"
-                          ? `${getResidentName(tx.residentId)} ${tx.periodeBulan ? `(${new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${tx.periodeTahun})` : ''}`
-                          : tx.description;
-                        const confirmed = await confirm(
-                          'Hapus Catatan Transaksi',
-                          `Yakin menghapus transaksi *"${txDetail}"*? Aksi ini akan seketika mengubah laporan arus kas seluruh keuangan.`,
-                          'danger'
-                        );
-                        if (confirmed) {
-                          deleteTransaction(tx.id);
-                        }
-                      }}
-                      className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
-                      title="Hapus Transaksi"
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {isPemasukan && tx.residentId && (
+                        <button
+                          onClick={() => handlePrintReceipt(tx)}
+                          className="text-blue-600 hover:bg-blue-50 p-1 rounded transition-colors"
+                          title="Cetak Bukti Bayar / Struk"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          const txDetail = tx.type === "Pemasukan"
+                            ? `${getResidentName(tx.residentId)} ${tx.periodeBulan ? `(${new Date(2000, tx.periodeBulan - 1).toLocaleString("id-ID", { month: "short" })} ${tx.periodeTahun})` : ''}`
+                            : tx.description;
+                          const confirmed = await confirm(
+                            'Hapus Catatan Transaksi',
+                            `Yakin menghapus transaksi *"${txDetail}"*? Aksi ini akan seketika mengubah laporan arus kas seluruh keuangan.`,
+                            'danger'
+                          );
+                          if (confirmed) {
+                            deleteTransaction(tx.id);
+                          }
+                        }}
+                        className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                        title="Hapus Transaksi"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -642,6 +686,15 @@ export default function Kas() {
                   )}
                   <td className="px-6 py-4 text-center truncate" style={{ width: colWidths.action }}>
                     <div className="flex justify-center gap-2">
+                        {tx.type === "Pemasukan" && tx.residentId && (
+                          <button
+                            onClick={() => handlePrintReceipt(tx)}
+                            className="text-blue-600 hover:bg-blue-50 hover:text-blue-700 p-1.5 rounded-lg transition-colors border border-transparent"
+                            title="Cetak Bukti Bayar / Struk"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={async () => {
                             const txDetail = tx.type === "Pemasukan"
@@ -808,6 +861,12 @@ export default function Kas() {
 
 
 
+      {/* Modal Cetak Ulang Struk / Bukti Bayar */}
+      <ReceiptModal
+        isOpen={!!printReceiptData}
+        onClose={() => setPrintReceiptData(null)}
+        data={printReceiptData}
+      />
     </div>
   );
 }
