@@ -36,6 +36,8 @@ export interface Transaction {
     // Fields specific to Transfer Antar Kas
     transferId?: string; // Shared ID linking paired transfer transactions
     transferToKasLocationId?: string; // Destination kas (on outgoing leg)
+    status?: 'Success' | 'Pending' | 'Failed';
+    referenceId?: string;
 }
 
 export interface User {

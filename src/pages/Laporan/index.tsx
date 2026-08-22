@@ -111,6 +111,7 @@ export default function Laporan() {
   const monthlyTransactions = useMemo(() => {
     return transactions.filter(
       (t) =>
+        (!t.status || t.status === 'Success') &&
         new Date(t.date).getMonth() + 1 === filterMonth &&
         new Date(t.date).getFullYear() === filterYear,
     );
@@ -118,12 +119,12 @@ export default function Laporan() {
 
   const getSaldoAwalBulan = (month: number, year: number) => {
     const beforeDate = new Date(year, month - 1, 1);
-    const earlierTxs = transactions.filter(t => new Date(t.date) < beforeDate && t.categoryId !== 'cat-transfer');
+    const earlierTxs = transactions.filter(t => new Date(t.date) < beforeDate && t.categoryId !== 'cat-transfer' && (!t.status || t.status === 'Success'));
     const earlierIn = earlierTxs.filter(t => t.type === 'Pemasukan').reduce((a, b) => a + b.nominal, 0);
     const earlierOut = earlierTxs.filter(t => t.type === 'Pengeluaran').reduce((a, b) => a + b.nominal, 0);
 
     const saldoAwalInMonth = transactions
-      .filter(t => t.categoryId === 'cat-saldo-awal' && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === year)
+      .filter(t => (!t.status || t.status === 'Success') && t.categoryId === 'cat-saldo-awal' && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === year)
       .reduce((a, b) => a + b.nominal, 0);
 
     return (earlierIn - earlierOut) + saldoAwalInMonth;
@@ -222,7 +223,7 @@ export default function Laporan() {
         return numA - numB;
       })
       .map(w => {
-        const wTx = transactions.filter(t => t.residentId === w.id && t.type === "Pemasukan" && t.periodeTahun === filterYear);
+        const wTx = transactions.filter(t => t.residentId === w.id && t.type === "Pemasukan" && t.periodeTahun === filterYear && (!t.status || t.status === 'Success'));
         const paidMonthsMap = new Map<number, { date: string; nominal: number; categoryName: string }>();
         wTx.forEach(t => {
           const categoryName = categories.find(c => c.id === t.categoryId)?.name || "Iuran";
@@ -264,6 +265,7 @@ export default function Laporan() {
       (t) =>
         t.residentId === activeCorrectionResident.id &&
         t.type === "Pemasukan" &&
+        (!t.status || t.status === 'Success') &&
         t.periodeTahun === filterYear
     );
   }, [transactions, activeCorrectionResident, filterYear]);
@@ -369,12 +371,12 @@ export default function Laporan() {
   };
 
   const getSaldoAwal = (year: number) => {
-    const beforeYearY = transactions.filter(t => new Date(t.date).getFullYear() < year);
+    const beforeYearY = transactions.filter(t => new Date(t.date).getFullYear() < year && (!t.status || t.status === 'Success'));
     const sumBeforePemasukan = beforeYearY.filter(t => t.type === 'Pemasukan').reduce((a, b) => a + b.nominal, 0);
     const sumBeforePengeluaran = beforeYearY.filter(t => t.type === 'Pengeluaran').reduce((a, b) => a + b.nominal, 0);
 
     const saldoAwalInYear = transactions
-      .filter(t => t.categoryId === 'cat-saldo-awal' && new Date(t.date).getFullYear() === year)
+      .filter(t => (!t.status || t.status === 'Success') && t.categoryId === 'cat-saldo-awal' && new Date(t.date).getFullYear() === year)
       .reduce((a, b) => a + b.nominal, 0);
 
     return (sumBeforePemasukan - sumBeforePengeluaran) + saldoAwalInYear;
@@ -400,7 +402,7 @@ export default function Laporan() {
     return months.map(m => {
       const monthTxs = transactions.filter(t => {
         const d = new Date(t.date);
-        return d.getMonth() + 1 === m && d.getFullYear() === filterYearTahunan;
+        return (!t.status || t.status === 'Success') && d.getMonth() + 1 === m && d.getFullYear() === filterYearTahunan;
       });
 
       const masuk = monthTxs.filter(t => t.type === 'Pemasukan' && t.categoryId !== 'cat-saldo-awal' && t.categoryId !== 'cat-transfer').reduce((s, t) => s + t.nominal, 0);
@@ -433,7 +435,7 @@ export default function Laporan() {
   const kasBalances = useMemo(() => {
     // We calculate balances per kas location covering ALL transactions up to the end of the selected year
     const endDate = new Date(filterYearTahunan, 11, 31, 23, 59, 59); // end of selected year
-    const validTxs = transactions.filter(t => new Date(t.date) <= endDate);
+    const validTxs = transactions.filter(t => new Date(t.date) <= endDate && (!t.status || t.status === 'Success'));
 
     return kasLocations.map(loc => {
       const txsForKas = validTxs.filter(t => t.kasLocationId === loc.id);

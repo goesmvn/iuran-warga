@@ -3,6 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import db from './db.js';
+import { executeBroadcast } from './index.js';
+
+// Auto-Broadcast Scheduler Variable
+let lastBroadcastRunStr = null;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -178,10 +182,48 @@ export function startBackupScheduler() {
   // Jalankan auto-backup scheduler setiap jam
   autoBackupIntervalId = setInterval(() => {
     runAutoBackup(false);
+    runAutoBroadcast(); // Cek juga jadwal auto-broadcast
   }, 60 * 60 * 1000);
   
   // Trigger backup pertama kali saat server start
   setTimeout(() => {
     runAutoBackup(false);
+    runAutoBroadcast(); // Cek juga saat start
   }, 5000);
+}
+
+/**
+ * Menjalankan broadcast tagihan secara otomatis jika tanggal sistem sesuai dengan 'auto_broadcast_date'
+ * (Ini fungsi minimalis tanpa iPaymu langsung untuk sementara, atau bisa panggil endpoint broadcast internal)
+ */
+export async function runAutoBroadcast() {
+  try {
+    const settings = {};
+    const rows = db.prepare('SELECT * FROM settings').all();
+    rows.forEach(r => settings[r.key] = r.value);
+
+    const autoDate = parseInt(settings['auto_broadcast_date']);
+    if (!autoDate || isNaN(autoDate) || autoDate < 1 || autoDate > 31) return; // Nonaktif / Invalid
+
+    const today = new Date();
+    const currentDate = today.getDate();
+    const currentMonthYear = `${today.getFullYear()}-${today.getMonth() + 1}`; // "2026-8"
+
+    // Cek apakah hari ini adalah tanggal yg dijadwalkan, dan belum dijalankan bulan ini
+    if (currentDate === autoDate && lastBroadcastRunStr !== currentMonthYear) {
+      console.log(`[Auto Broadcast] Tanggal ${autoDate} terdeteksi. Memulai auto-broadcast...`);
+      
+      try {
+        const result = await executeBroadcast();
+        console.log(`[Auto Broadcast] Selesai. Sukses: ${result.successCount}, Gagal: ${result.failCount}`);
+      } catch (e) {
+        console.error('[Auto Broadcast Logic Execution Failed]', e.message);
+      }
+
+      // Tandai sudah dijalankan di bulan ini
+      lastBroadcastRunStr = currentMonthYear;
+    }
+  } catch (error) {
+    console.error('[Auto Broadcast Logic Error]', error.message);
+  }
 }
