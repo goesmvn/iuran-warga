@@ -79,6 +79,8 @@ const initDB = () => {
       kasLocationId TEXT,
       transferId TEXT,
       transferToKasLocationId TEXT,
+      status TEXT DEFAULT 'Success',
+      referenceId TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(categoryId) REFERENCES categories(id),
       FOREIGN KEY(residentId) REFERENCES warga(id),
@@ -153,6 +155,16 @@ try {
 }
 try {
   db.exec(`ALTER TABLE transactions ADD COLUMN transferToKasLocationId TEXT`);
+} catch (_) {
+  // Column already exists
+}
+try {
+  db.exec(`ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'Success'`);
+} catch (_) {
+  // Column already exists
+}
+try {
+  db.exec(`ALTER TABLE transactions ADD COLUMN referenceId TEXT`);
 } catch (_) {
   // Column already exists
 }

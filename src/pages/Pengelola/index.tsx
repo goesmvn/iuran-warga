@@ -2,17 +2,17 @@ import { useState, useEffect, useRef } from 'react';
 import { useUsers } from '../../hooks/useUsers';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
-import { Shield, Trash2, Plus, X, Settings, Download, Upload, Database, MapPin, Users, CalendarDays, Landmark, Edit2 } from 'lucide-react';
+import { Shield, Trash2, Plus, X, Settings, Download, Upload, Database, MapPin, Users, CalendarDays, Landmark, Edit2, Bot, LogOut, RefreshCw } from 'lucide-react';
 import { apiFetch, apiUrl } from '../../utils/apiFetch';
 import { useConfirm } from '../../contexts/ConfirmContext';
 
-type SettingsTab = 'pengguna' | 'pengaturan' | 'identitas' | 'backup';
+type SettingsTab = 'pengguna' | 'pengaturan' | 'bot' | 'identitas' | 'backup';
 
 export default function Pengelola() {
   const { users, addUser, updateUser, deleteUser } = useUsers();
   const { user: currentUser } = useAuth();
   const { confirm, alert: customAlert } = useConfirm();
-  
+
   const [activeTab, setActiveTab] = useState<SettingsTab>('pengguna');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -29,10 +29,13 @@ export default function Pengelola() {
   const namaDesa = settings['nama_desa'] || '';
   const alamat = settings['alamat'] || '';
   const mapsUrl = settings['maps_url'] || '';
-  const waTemplateTunggakan = settings['wa_template_tunggakan'] || 'Om Swastyastu / Halo Bapak/Ibu {{nama}} (Blok {{blok}}),\n\nKami dari pengurus lingkungan ingin menginformasikan bahwa berdasarkan catatan pembukuan, terdapat tagihan iuran kas warga yang belum terselesaikan sebanyak *{{bulan}} bulan* di tahun berjalan.\nTotal tunggakan: *Rp {{nominal}}*\n\nMohon konfirmasinya jika sudah melakukan pembayaran ke rekening:\n{{rekening}}\n\nagar dapat kami perbarui di sistem. Jika belum, mohon kesediaannya untuk menyelesaikan tagihan tersebut.\n\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏';
+  const waTemplateTunggakan = settings['wa_template_tunggakan'] || 'Om Swastyastu / Halo Bapak/Ibu {{nama}} ({{nomor_rumah}}),\n\nKami dari pengurus lingkungan menginformasikan tagihan iuran kas warga:\n\nTagihan Bulan Ini: *Rp {{nominal_bulan_ini}}*\nTunggakan Sebelumnya: *Rp {{nominal_tunggakan}}*\nTotal Tagihan: *Rp {{total_tagihan}}* ({{jumlah_bulan}} bulan)\n\nPembayaran dapat dilakukan secara online dan otomatis terkonfirmasi lunas melalui link berikut:\n👉 {{payment_link}}\n\n*(Link di atas hanya berlaku selama 1x24 jam. Mohon segera diselesaikan).* \n\nApabila terdapat kendala dalam pembayaran, silakan balas pesan ini dengan angka *3* untuk menghubungi pengurus.\nTerima kasih banyak atas partisipasi dan dukungannya. 🙏';
   const nominalIuranBulanan = settings['nominal_iuran_bulanan'] || '50000';
   const rekeningTujuan = settings['rekening_tujuan'] || '';
-  
+
+  const autoBroadcastDate = settings['auto_broadcast_date'] || '';
+  const [localAutoBroadcastDate, setLocalAutoBroadcastDate] = useState('');
+
   const [isUpdatingSetting, setIsUpdatingSetting] = useState(false);
   const [localStartYear, setLocalStartYear] = useState('');
   const [localNamaKetua, setLocalNamaKetua] = useState('');
@@ -45,6 +48,30 @@ export default function Pengelola() {
   const [localNominalIuran, setLocalNominalIuran] = useState('');
   const [localRekeningTujuan, setLocalRekeningTujuan] = useState('');
 
+  const [isTestingBroadcast, setIsTestingBroadcast] = useState(false);
+  const [testPhone, setTestPhone] = useState('+6285190321727');
+
+  const handleTestBroadcast = async () => {
+    setIsTestingBroadcast(true);
+    try {
+      const res = await apiFetch('/api/broadcast/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: localWaTemplate, phone: testPhone })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await customAlert('Pesan Terkirim', `Pesan uji coba berhasil dikirim ke nomor ${testPhone}`, 'success');
+      } else {
+        await customAlert('Gagal Mengirim', data.error || 'Terjadi kesalahan.', 'error');
+      }
+    } catch (e) {
+      await customAlert('Error', 'Gagal menghubungi server.', 'error');
+    } finally {
+      setIsTestingBroadcast(false);
+    }
+  };
+
   // States untuk Google Drive Auto Backup
   const [backupInterval, setBackupInterval] = useState('Nonaktif');
   const [gdriveBackupEnabled, setGdriveBackupEnabled] = useState(false);
@@ -55,8 +82,46 @@ export default function Pengelola() {
   const [isSavingBackupSettings, setIsSavingBackupSettings] = useState(false);
   const [isTestingBackup, setIsTestingBackup] = useState(false);
 
-  const [isRestoring, setIsRestoring] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [botStatus, setBotStatus] = useState<string>('Memeriksa...');
+  const [botQr, setBotQr] = useState<string | null>(null);
+  const [isCheckingBot, setIsCheckingBot] = useState(false);
+
+  const checkBotStatus = async () => {
+    setIsCheckingBot(true);
+    try {
+      const res = await apiFetch('/api/whatsapp/status');
+      if (res.ok) {
+        const data = await res.json();
+        setBotStatus(data.status);
+        setBotQr(data.qr);
+      }
+    } catch (e) {
+      console.error(e);
+      setBotStatus('Gagal terhubung ke server');
+    } finally {
+      setIsCheckingBot(false);
+    }
+  };
+
+  const handleBotLogout = async () => {
+    const confirmed = await confirm('Putuskan Bot', 'Yakin ingin memutuskan koneksi bot WhatsApp saat ini?', 'danger');
+    if (!confirmed) return;
+    try {
+      await apiFetch('/api/whatsapp/logout', { method: 'POST' });
+      await checkBotStatus();
+      await customAlert('Bot Diputuskan', 'Sesi bot WhatsApp telah dihapus. Silakan scan ulang QR.', 'success');
+    } catch (e) {
+      await customAlert('Error', 'Gagal memutuskan bot.', 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'bot') {
+      checkBotStatus();
+      const interval = setInterval(checkBotStatus, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab]);
 
   const handleBackup = async () => {
     try {
@@ -110,7 +175,7 @@ export default function Pengelola() {
         body: buffer
       });
       const data = await res.json();
-      
+
       if (res.ok) {
         await customAlert('Restore Berhasil', 'Restore berhasil! Sistem akan dimuat ulang...', 'success');
         setTimeout(() => {
@@ -140,8 +205,9 @@ export default function Pengelola() {
        setLocalWaTemplate(waTemplateTunggakan);
        setLocalNominalIuran(nominalIuranBulanan);
        setLocalRekeningTujuan(rekeningTujuan);
+       setLocalAutoBroadcastDate(autoBroadcastDate);
     }
-  }, [startYear, namaKetua, namaBendahara, namaOrganisasi, namaDesa, alamat, mapsUrl, waTemplateTunggakan, nominalIuranBulanan, rekeningTujuan, settingsLoading]);
+  }, [startYear, namaKetua, namaBendahara, namaOrganisasi, namaDesa, alamat, mapsUrl, waTemplateTunggakan, nominalIuranBulanan, rekeningTujuan, autoBroadcastDate, settingsLoading]);
 
   const handleUpdateSettings = async () => {
     setIsUpdatingSetting(true);
@@ -156,7 +222,8 @@ export default function Pengelola() {
     if (localWaTemplate !== waTemplateTunggakan) { await updateSetting('wa_template_tunggakan', localWaTemplate); changed = true; }
     if (localNominalIuran !== nominalIuranBulanan) { await updateSetting('nominal_iuran_bulanan', localNominalIuran); changed = true; }
     if (localRekeningTujuan !== rekeningTujuan) { await updateSetting('rekening_tujuan', localRekeningTujuan); changed = true; }
-    
+    if (localAutoBroadcastDate !== autoBroadcastDate) { await updateSetting('auto_broadcast_date', localAutoBroadcastDate); changed = true; }
+
     setIsUpdatingSetting(false);
     if (changed) await customAlert("Pengaturan Disimpan", "Pengaturan berhasil disimpan.", "success");
   };
@@ -230,6 +297,9 @@ export default function Pengelola() {
     }
   };
 
+  const [isRestoring, setIsRestoring] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   if (currentUser?.role !== 'Admin') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center">
@@ -261,9 +331,11 @@ export default function Pengelola() {
     setIsModalOpen(true);
   };
 
+
   const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
     { id: 'pengguna', label: 'Pengelola', icon: Users },
     { id: 'pengaturan', label: 'Pengaturan', icon: Settings },
+    { id: 'bot', label: 'WhatsApp Bot', icon: Bot },
     { id: 'identitas', label: 'Identitas & Lokasi', icon: MapPin },
     { id: 'backup', label: 'Backup & Restore', icon: Database },
   ];
@@ -288,8 +360,8 @@ export default function Pengelola() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all ${
-              activeTab === tab.id 
-                ? 'bg-white text-gray-900 shadow-sm border border-gray-200' 
+              activeTab === tab.id
+                ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             }`}
           >
@@ -374,7 +446,7 @@ export default function Pengelola() {
               <CalendarDays className="w-5 h-5 text-gray-400" />
               <h3 className="font-bold text-gray-800">Periode Pembukuan</h3>
             </div>
-            
+
             <div className="flex flex-col gap-2">
               <label className="text-sm font-bold text-gray-700">Tahun Mulai Pembukuan (Data Awal)</label>
               <p className="text-xs text-gray-500 mb-2">Semua perhitungan tunggakan / tagihan warga akan ditagih secara akumulatif mulai dari tahun yang ditentukan di bawah ini hingga tahun saat ini.</p>
@@ -382,8 +454,8 @@ export default function Pengelola() {
                 {settingsLoading ? (
                   <div className="h-11 w-48 bg-gray-100 rounded-xl animate-pulse"></div>
                 ) : (
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={localStartYear}
                     onChange={(e) => setLocalStartYear(e.target.value)}
                     className={`${inputClass} font-bold max-w-[200px]`}
@@ -401,8 +473,8 @@ export default function Pengelola() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 flex flex-col gap-2">
                   <label className="text-sm font-bold text-gray-700">Ketua</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={localNamaKetua}
                     onChange={(e) => setLocalNamaKetua(e.target.value)}
                     placeholder="Contoh: Bapak Ketua..."
@@ -411,8 +483,8 @@ export default function Pengelola() {
                 </div>
                 <div className="flex-1 flex flex-col gap-2">
                   <label className="text-sm font-bold text-gray-700">Bendahara</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={localNamaBendahara}
                     onChange={(e) => setLocalNamaBendahara(e.target.value)}
                     placeholder="Contoh: Bapak Bendahara..."
@@ -432,8 +504,8 @@ export default function Pengelola() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 flex flex-col gap-2">
                   <label className="text-sm font-bold text-gray-700">Nominal Iuran Bulanan (Rp)</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={localNominalIuran}
                     onChange={(e) => setLocalNominalIuran(e.target.value)}
                     placeholder="Contoh: 50000"
@@ -442,8 +514,8 @@ export default function Pengelola() {
                 </div>
                 <div className="flex-[2] flex flex-col gap-2">
                   <label className="text-sm font-bold text-gray-700">Rekening Tujuan / Instruksi Transfer</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={localRekeningTujuan}
                     onChange={(e) => setLocalRekeningTujuan(e.target.value)}
                     placeholder="Cth: BCA 12345678 a/n Pengurus RT"
@@ -452,32 +524,146 @@ export default function Pengelola() {
                 </div>
               </div>
             </div>
-
-            {/* WhatsApp Template Section */}
-            <div className="border-t border-gray-100 mt-6 pt-6">
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="font-bold text-gray-800">Template Pesan WhatsApp Tunggakan</h3>
-              </div>
-              <p className="text-xs text-gray-500 mb-4">
-                Sesuaikan kata-kata untuk pesan tagihan otomatis. Variabel tersedia: <code>{'{{nama}}'}</code>, <code>{'{{blok}}'}</code>, <code>{'{{bulan}}'}</code>, <code>{'{{nominal}}'}</code>, dan <code>{'{{rekening}}'}</code>.
-              </p>
-              <textarea 
-                value={localWaTemplate}
-                onChange={(e) => setLocalWaTemplate(e.target.value)}
-                className={`${inputClass} min-h-[150px] leading-relaxed resize-y`}
-                placeholder="Ketik template pesan WhatsApp di sini..."
-              />
-            </div>
-
             <div className="border-t border-gray-100 mt-6 pt-6 flex justify-end">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={handleUpdateSettings}
                 disabled={isUpdatingSetting}
                 className="px-6 py-2.5 bg-[#f43f5e] hover:bg-[#e11d48] disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center gap-2 shadow-sm"
               >
                 {isUpdatingSetting ? 'Menyimpan...' : 'Simpan Pengaturan'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Bot WhatsApp */}
+      {activeTab === 'bot' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <Bot className="w-6 h-6 text-[#128C7E]" />
+                <h3 className="font-bold text-gray-800 text-lg">Integrasi WhatsApp Bot</h3>
+              </div>
+              <button onClick={checkBotStatus} disabled={isCheckingBot} className="p-2 text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                <RefreshCw className={`w-4 h-4 ${isCheckingBot ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-8 items-start">
+              <div className="flex-1 space-y-4">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-1">Status Koneksi:</h4>
+                  <div className="flex items-center gap-2">
+                    <span className={`relative flex h-3 w-3`}>
+                      {botStatus === 'Terhubung' ? (
+                        <><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></>
+                      ) : (
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                      )}
+                    </span>
+                    <span className={`font-bold ${botStatus === 'Terhubung' ? 'text-green-600' : 'text-red-500'}`}>{botStatus}</span>
+                  </div>
+                </div>
+
+                <p className="text-sm text-gray-600">
+                  Sistem menggunakan <i>Baileys</i> (Web Socket) untuk terhubung ke WhatsApp. Scan QR Code di samping menggunakan aplikasi WhatsApp di HP Anda (Pilih "Tautkan Perangkat").
+                </p>
+
+                {botStatus === 'Terhubung' && (
+                  <button
+                    onClick={handleBotLogout}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl text-sm transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" /> Putuskan Koneksi Bot
+                  </button>
+                )}
+              </div>
+
+              <div className="w-full md:w-64 flex flex-col items-center justify-center p-4 bg-gray-50 border border-gray-200 rounded-2xl">
+                {botQr ? (
+                   <img src={botQr} alt="WhatsApp QR Code" className="w-48 h-48 rounded-lg shadow-sm" />
+                ) : (
+                   <div className="w-48 h-48 flex items-center justify-center bg-gray-200 text-gray-400 rounded-lg text-sm font-bold text-center p-4 shadow-inner">
+                     {botStatus === 'Terhubung' ? '✅ Perangkat Sudah Terhubung' : 'Memuat QR Code...'}
+                   </div>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 mt-8 pt-8">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-gray-800">Template Pesan Broadcast Tagihan</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                   <label className="text-sm font-bold text-gray-700">Auto-Kirim tiap Tanggal:</label>
+                   <input
+                     type="number"
+                     min="1"
+                     max="31"
+                     value={localAutoBroadcastDate}
+                     onChange={(e) => setLocalAutoBroadcastDate(e.target.value)}
+                     placeholder="1 - 31"
+                     className={`${inputClass} w-24 px-2 py-1.5`}
+                   />
+                </div>
+              </div>
+
+              <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100 mb-4">
+                <p className="text-xs text-blue-800 mb-2 font-medium">Variabel yang akan diganti otomatis oleh sistem saat pengiriman:</p>
+                <div className="flex flex-wrap gap-2 text-xs font-mono text-blue-700">
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200">{'{{nama}}'}</span>
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200">{'{{nomor_rumah}}'}</span>
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200">{'{{nominal_bulan_ini}}'}</span>
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200">{'{{nominal_tunggakan}}'}</span>
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200">{'{{total_tagihan}}'}</span>
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200">{'{{jumlah_bulan}}'}</span>
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200">{'{{rekening}}'}</span>
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200">{'{{payment_link}}'}</span>
+                </div>
+              </div>
+
+              <textarea
+                value={localWaTemplate}
+                onChange={(e) => setLocalWaTemplate(e.target.value)}
+                className={`${inputClass} min-h-[250px] leading-relaxed resize-y bg-gray-50`}
+                placeholder="Ketik template pesan WhatsApp di sini..."
+              />
+
+              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-gray-100 pt-4">
+                <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
+                  <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 focus-within:border-[#f43f5e] focus-within:ring-1 focus-within:ring-[#f43f5e]">
+                     <span className="text-gray-500 text-sm font-medium mr-1">No. Tes:</span>
+                     <input
+                       type="text"
+                       value={testPhone}
+                       onChange={(e) => setTestPhone(e.target.value)}
+                       className="bg-transparent border-none focus:ring-0 text-sm font-bold text-gray-700 w-full sm:w-32 py-2"
+                       placeholder="+628..."
+                     />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTestBroadcast}
+                    disabled={isTestingBroadcast || botStatus !== 'Terhubung'}
+                    className="flex-1 sm:flex-none justify-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold rounded-xl transition-colors text-sm flex items-center gap-2"
+                  >
+                    {isTestingBroadcast ? 'Mengirim...' : 'Tes Kirim Pesan'}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleUpdateSettings}
+                  disabled={isUpdatingSetting}
+                  className="w-full sm:w-auto px-6 py-2.5 bg-[#f43f5e] hover:bg-[#e11d48] disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex justify-center items-center gap-2 shadow-sm"
+                >
+                  {isUpdatingSetting ? 'Menyimpan...' : 'Simpan Template'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -492,12 +678,12 @@ export default function Pengelola() {
               <h3 className="font-bold text-gray-800">Identitas Organisasi</h3>
             </div>
             <p className="text-xs text-gray-500 mb-6">Informasi ini akan ditampilkan di kop surat, struk pembayaran, dan laporan keuangan.</p>
-            
+
             <div className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-bold text-gray-700">Nama Organisasi <span className="text-xs font-normal text-gray-400">(tampil di laporan & struk)</span></label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={localNamaOrganisasi}
                   onChange={(e) => setLocalNamaOrganisasi(e.target.value)}
                   placeholder="Contoh: Suka Duka Gang Jepun"
@@ -507,8 +693,8 @@ export default function Pengelola() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 flex flex-col gap-2">
                   <label className="text-sm font-bold text-gray-700">Nama Desa / Kelurahan</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={localNamaDesa}
                     onChange={(e) => setLocalNamaDesa(e.target.value)}
                     placeholder="Contoh: Desa Sanur Kauh, Kec. Denpasar Selatan"
@@ -518,7 +704,7 @@ export default function Pengelola() {
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-bold text-gray-700">Alamat Lengkap <span className="text-xs font-normal text-gray-400">(tampil di struk)</span></label>
-                <textarea 
+                <textarea
                   value={localAlamat}
                   onChange={(e) => setLocalAlamat(e.target.value)}
                   placeholder="Contoh: Jl. Danau Poso Gg. Jepun No. 1, Sanur"
@@ -534,8 +720,8 @@ export default function Pengelola() {
                 <h3 className="font-bold text-gray-800">Lokasi Google Maps</h3>
               </div>
               <p className="text-xs text-gray-500 mb-4">Buka Google Maps → Cari lokasi → Klik "Share" → Copy Link.</p>
-              <input 
-                type="url" 
+              <input
+                type="url"
                 value={localMapsUrl}
                 onChange={(e) => setLocalMapsUrl(e.target.value)}
                 placeholder="https://maps.google.com/..."
@@ -558,8 +744,8 @@ export default function Pengelola() {
             </div>
 
             <div className="border-t border-gray-100 mt-6 pt-6 flex justify-end">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={handleUpdateSettings}
                 disabled={isUpdatingSetting}
                 className="px-6 py-2.5 bg-[#f43f5e] hover:bg-[#e11d48] disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm flex items-center gap-2 shadow-sm"
@@ -593,8 +779,8 @@ export default function Pengelola() {
                 <h3 className="font-bold text-red-800 text-sm mb-2">Restore Data (Unggah)</h3>
                 <p className="text-xs text-red-600/80 mb-4">Peringatan: Restore akan menimpa database saat ini dengan file yang Anda upload!</p>
                 <input type="file" accept=".sqlite" ref={fileInputRef} onChange={handleRestore} className="hidden" />
-                <button 
-                  onClick={() => fileInputRef.current?.click()} 
+                <button
+                  onClick={() => fileInputRef.current?.click()}
                   disabled={isRestoring}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#f43f5e] hover:bg-[#e11d48] disabled:bg-gray-300 text-white font-bold rounded-xl text-sm transition-colors shadow-sm"
                 >
@@ -609,7 +795,7 @@ export default function Pengelola() {
                 <Database className="w-5 h-5 text-gray-400" />
                 <h3 className="font-bold text-gray-800">Auto Backup Google Drive</h3>
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Interval Backup Otomatis</label>
@@ -730,7 +916,7 @@ export default function Pengelola() {
                 <label className="block text-sm font-bold text-gray-700 mb-1">{editingUserId ? 'Password Baru (kosongkan jika tidak diubah)' : 'Passkey Default'}</label>
                 <input {...(editingUserId ? {} : { required: true })} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={editingUserId ? '••••••' : ''} className={inputClass} />
               </div>
-              
+
               <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
                 <button type="button" onClick={() => { setIsModalOpen(false); setEditingUserId(null); }} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">Batal</button>
                 <button type="submit" className="px-5 py-2.5 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] rounded-xl transition-colors shadow-sm">{editingUserId ? 'Simpan Perubahan' : 'Simpan Kredensial'}</button>

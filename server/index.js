@@ -10,6 +10,9 @@ import rateLimit from 'express-rate-limit';
 import db from './db.js';
 import { startBackupScheduler, runAutoBackup } from './backup.js';
 
+import { connectToWhatsApp, getStatus, logout, sendMessage } from './whatsapp/index.js';
+import { createPayment, checkTransaction } from './ipaymu.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -55,6 +58,7 @@ app.use(helmet({
 }));
 
 app.use(express.json({ limit: '1mb' })); // [SEC-04] Body size limit (prevent DoS via large payloads)
+app.use(express.urlencoded({ extended: true, limit: '1mb' })); // iPaymu sends Webhook as application/x-www-form-urlencoded
 
 // =====================================================================
 // RATE LIMITERS
@@ -81,10 +85,12 @@ app.use('/api', apiLimiter);
 // HELPERS
 // =====================================================================
 // [SEC-05] Input sanitization helper - strip control chars & trim
-const sanitize = (val) => {
+const sanitize = (val, allowNewlines = false) => {
   if (val === null || val === undefined) return null;
   if (typeof val === 'number') return val;
-  return String(val).replace(/[\x00-\x1F\x7F]/g, '').trim().substring(0, 500);
+  // If allowNewlines is true, we keep \n and \r but strip other controls
+  const regex = allowNewlines ? /[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F]/g : /[\x00-\x1F\x7F]/g;
+  return String(val).replace(regex, '').trim().substring(0, 1500);
 };
 
 const sanitizeNum = (val) => {
@@ -131,7 +137,7 @@ app.post('/api/login', loginLimiter, (req, res) => {
 
 // JWT Middleware
 app.use('/api', (req, res, next) => {
-  if (req.path === '/login' || req.path === '/ping') return next();
+  if (req.path === '/login' || req.path === '/ping' || req.path === '/ipaymu/callback') return next();
 
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -230,7 +236,7 @@ app.put('/api/users/:id', requireAdmin, (req, res) => {
 // =====================================================================
 // SETTINGS - [SEC-06] Admin Only
 // =====================================================================
-const ALLOWED_SETTING_KEYS = ['start_year', 'nama_ketua', 'nama_bendahara', 'nama_organisasi', 'nama_desa', 'alamat', 'maps_url', 'wa_template_tunggakan', 'nominal_iuran_bulanan', 'rekening_tujuan'];
+const ALLOWED_SETTING_KEYS = ['start_year', 'nama_ketua', 'nama_bendahara', 'nama_organisasi', 'nama_desa', 'alamat', 'maps_url', 'wa_template_tunggakan', 'nominal_iuran_bulanan', 'rekening_tujuan', 'auto_broadcast_date'];
 
 app.get('/api/settings', (req, res) => {
   const settingsArray = db.prepare('SELECT * FROM settings').all();
@@ -244,7 +250,8 @@ app.put('/api/settings/:key', requireAdmin, (req, res) => {
   if (!ALLOWED_SETTING_KEYS.includes(key)) {
     return res.status(400).json({ error: 'Konfigurasi tidak valid.' });
   }
-  const value = sanitize(req.body?.value);
+  const isTemplate = key === 'wa_template_tunggakan';
+  const value = sanitize(req.body?.value, isTemplate);
   if (value === null) return res.status(400).json({ error: 'Nilai tidak boleh kosong.' });
 
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
@@ -332,15 +339,17 @@ app.post('/api/transactions', (req, res) => {
   const kasLocationId = sanitize(req.body?.kasLocationId);
   const transferId = sanitize(req.body?.transferId);
   const transferToKasLocationId = sanitize(req.body?.transferToKasLocationId);
+  const status = sanitize(req.body?.status) || 'Success'; // Default to success for manual input
 
   if (!date || !categoryId) return res.status(400).json({ error: 'Tanggal dan kategori wajib diisi.' });
   if (!['Pemasukan', 'Pengeluaran'].includes(type)) return res.status(400).json({ error: 'Tipe transaksi tidak valid.' });
   if (nominal < 0) return res.status(400).json({ error: 'Nominal tidak boleh negatif.' });
   if (alreadyExists('transactions', id)) return res.json({ success: true, id });
 
-  // Cegah pembayaran ganda untuk periode yang sama (mis. dua HP mencatat offline untuk warga yang sama)
+  // Cegah pembayaran ganda untuk periode yang sama (mis. dua HP mencatat offline untuk warga yang sama).
+  // Tagihan WhatsApp/iPaymu yang masih Pending atau Failed tidak dihitung sebagai sudah bayar.
   if (type === 'Pemasukan' && residentId && periodeTahun) {
-    const dup = db.prepare('SELECT id FROM transactions WHERE type = ? AND residentId = ? AND categoryId = ? AND periodeTahun = ? AND periodeBulan IS ?')
+    const dup = db.prepare("SELECT id FROM transactions WHERE type = ? AND residentId = ? AND categoryId = ? AND periodeTahun = ? AND periodeBulan IS ? AND (status IS NULL OR status = 'Success')")
       .get('Pemasukan', residentId, categoryId, periodeTahun, periodeBulan);
     if (dup) {
       const periode = periodeBulan ? `${periodeBulan}/${periodeTahun}` : `tahun ${periodeTahun}`;
@@ -349,7 +358,7 @@ app.post('/api/transactions', (req, res) => {
   }
 
   try {
-    db.prepare('INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId);
+    db.prepare('INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId, status);
     res.json({ success: true, id });
   } catch (e) {
     if (e.message.includes('FOREIGN KEY constraint failed')) {
@@ -357,6 +366,14 @@ app.post('/api/transactions', (req, res) => {
     }
     throw e;
   }
+});
+
+app.put('/api/transactions/:id/status', requireAdmin, (req, res) => {
+  const status = req.body?.status;
+  if (!['Success', 'Pending', 'Failed'].includes(status)) return res.status(400).json({ error: 'Status tidak valid.' });
+
+  db.prepare('UPDATE transactions SET status = ? WHERE id = ?').run(status, req.params.id);
+  res.json({ success: true });
 });
 
 app.delete('/api/transactions/:id', requireAdmin, (req, res) => {
@@ -459,6 +476,353 @@ app.delete('/api/categories/:id', requireAdmin, (req, res) => {
 });
 
 // =====================================================================
+// WHATSAPP
+// =====================================================================
+app.get('/api/whatsapp/status', requireAdmin, (req, res) => {
+  res.json(getStatus());
+});
+
+app.post('/api/whatsapp/logout', requireAdmin, async (req, res) => {
+  await logout();
+  res.json({ success: true });
+});
+
+// Hitung bulan iuran yang belum dibayar seorang warga, dari Januari start_year s/d bulan berjalan.
+// Logika sama dengan halaman Pembayaran: kategori bulanan menandai 1 bulan, kategori tahunan menandai 12 bulan.
+// Transaksi Pending/Failed tidak dihitung sebagai lunas.
+function getUnpaidMonths(residentId, startYear) {
+  const categories = db.prepare('SELECT id, name, periode FROM categories').all();
+  const bulananIds = new Set(categories.filter(c => c.periode === 'Bulanan' || c.name.toLowerCase().includes('bulanan')).map(c => c.id));
+  const tahunanIds = new Set(categories.filter(c => c.periode === 'Tahunan' || c.name.toLowerCase().includes('tahunan')).map(c => c.id));
+
+  const paidTx = db.prepare(`
+    SELECT categoryId, periodeBulan, periodeTahun FROM transactions
+    WHERE residentId = ? AND type = 'Pemasukan' AND (status IS NULL OR status = 'Success') AND periodeTahun IS NOT NULL
+  `).all(residentId);
+
+  const paid = new Set();
+  for (const t of paidTx) {
+    if (tahunanIds.has(t.categoryId)) {
+      for (let m = 1; m <= 12; m++) paid.add(`${t.periodeTahun}-${m}`);
+    } else if (t.periodeBulan && bulananIds.has(t.categoryId)) {
+      paid.add(`${t.periodeTahun}-${t.periodeBulan}`);
+    }
+  }
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const unpaid = [];
+  for (let y = startYear; y <= currentYear; y++) {
+    const lastMonth = y === currentYear ? currentMonth : 12;
+    for (let m = 1; m <= lastMonth; m++) {
+      if (!paid.has(`${y}-${m}`)) unpaid.push({ year: y, month: m });
+    }
+  }
+  return unpaid;
+}
+
+// Fungsi eksekutor broadcast, dipisahkan agar bisa dipanggil dari API maupun Scheduler/CronJob
+export async function executeBroadcast(templateStr) {
+  const status = getStatus();
+  if (status.status !== 'Terhubung') {
+    throw new Error('WhatsApp belum terhubung.');
+  }
+
+  // Get active residents and current settings
+  const wargaList = db.prepare('SELECT id, namaKepalaKeluarga, nomorRumah, phone FROM warga WHERE status = "Aktif"').all();
+  const settings = db.prepare('SELECT key, value FROM settings').all().reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
+  const nominal = Number(settings.nominal_iuran_bulanan) || 0;
+  const startYear = parseInt(settings.start_year, 10) || new Date().getFullYear();
+
+  // Gunakan template dari param, atau fallback ke DB
+  const template = templateStr || settings['wa_template_tunggakan'];
+  if (!template) throw new Error('Template pesan kosong.');
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const warga of wargaList) {
+    if (!warga.phone) {
+      failCount++;
+      continue;
+    }
+
+    const unpaidMonths = getUnpaidMonths(warga.id, startYear);
+    const monthsDue = unpaidMonths.length;
+    const now = new Date();
+    const currentMonthUnpaid = unpaidMonths.some(u => u.year === now.getFullYear() && u.month === now.getMonth() + 1);
+    const totalDue = nominal * monthsDue;
+    const tunggakan = totalDue - (currentMonthUnpaid ? nominal : 0); // di luar bulan berjalan
+
+    if (totalDue > 0) {
+      let paymentLink = '#';
+      const referenceId = `TX-${warga.id}-${Date.now()}`;
+      const webhookUrl = process.env.WEBHOOK_DOMAIN ? `${process.env.WEBHOOK_DOMAIN}/api/ipaymu/callback` : 'https://google.com/api/ipaymu/callback';
+
+      // Biaya admin withdrawal 2%
+      const withdrawalFee = Math.ceil(totalDue * 0.02);
+      const totalBilledToIPaymu = totalDue + withdrawalFee;
+
+      // Mencegah Tagihan Ganda / Kedaluwarsa:
+      const cancelled = db.prepare(`UPDATE transactions SET status = 'Failed', description = description || ' (Dibatalkan sistem - Diganti tagihan baru)' WHERE residentId = ? AND status = 'Pending'`).run(warga.id);
+
+      if (cancelled.changes > 0) {
+         console.log(`[Broadcast] Membatalkan tagihan lama milik ${warga.namaKepalaKeluarga} dan membuat ulang.`);
+      }
+
+      try {
+        if (process.env.IPAYMU_VA) {
+           const payment = await createPayment({
+             product: `Tagihan Iuran - ${warga.namaKepalaKeluarga} (+Biaya Aplikasi 2%)`,
+             amount: totalBilledToIPaymu,
+             referenceId: referenceId,
+             buyerName: warga.namaKepalaKeluarga,
+             buyerPhone: warga.phone,
+             notifyUrl: webhookUrl
+           });
+           paymentLink = payment.Url;
+
+           // Simpan DRAFT transaksi "Pending", 1 baris per bulan tertunggak dengan referenceId yang sama,
+           // agar saat lunas setiap bulan tercatat terbayar di laporan.
+           const insertPending = db.prepare(`
+             INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, status, referenceId)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           `);
+           const txDate = new Date().toISOString().split('T')[0];
+           db.transaction(() => {
+             for (const u of unpaidMonths) {
+               insertPending.run(
+                 `tx-${Date.now()}-${warga.id}-${u.year}-${u.month}`,
+                 txDate,
+                 'cat-1',
+                 'Pemasukan',
+                 nominal,
+                 `Pembayaran Broadcast Tunggakan (${monthsDue} bln)`,
+                 warga.id,
+                 u.month,
+                 u.year,
+                 'loc-default',
+                 'Pending',
+                 referenceId
+               );
+             }
+           })();
+        }
+      } catch (err) {
+        console.error('iPaymu error:', err.message);
+      }
+
+      let message = template
+        .replace(/\{\{nama\}\}/g, warga.namaKepalaKeluarga)
+        .replace(/\{\{nomor_rumah\}\}/g, warga.nomorRumah)
+        .replace(/\{\{nominal_bulan_ini\}\}/g, nominal.toLocaleString('id-ID'))
+        .replace(/\{\{nominal_tunggakan\}\}/g, tunggakan.toLocaleString('id-ID'))
+        .replace(/\{\{total_tagihan\}\}/g, totalDue.toLocaleString('id-ID'))
+        .replace(/\{\{jumlah_bulan\}\}/g, monthsDue)
+        .replace(/\{\{payment_link\}\}/g, paymentLink)
+        .replace(/\{\{rekening\}\}/g, settings.rekening_tujuan || '');
+
+      try {
+        await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+
+        const jid = `${warga.phone.replace(/^0/, '62').replace(/\D/g, '')}@s.whatsapp.net`;
+        await sendMessage(jid, message);
+        successCount++;
+      } catch (err) {
+        console.error('WA send error:', err.message);
+        failCount++;
+      }
+    }
+  }
+
+  return { successCount, failCount };
+}
+
+// =====================================================================
+// BROADCAST (with iPaymu)
+// =====================================================================
+app.post('/api/broadcast', requireAdmin, async (req, res) => {
+  const { template } = req.body;
+  if (!template) return res.status(400).json({ error: 'Template pesan wajib diisi.' });
+
+  try {
+    const result = await executeBroadcast(template);
+    res.json({ success: true, successCount: result.successCount, failCount: result.failCount });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/broadcast/test', requireAdmin, async (req, res) => {
+  const { template, phone } = req.body;
+  if (!template) return res.status(400).json({ error: 'Template pesan wajib diisi.' });
+  if (!phone) return res.status(400).json({ error: 'Nomor telepon tujuan wajib diisi.' });
+
+  const status = getStatus();
+  if (status.status !== 'Terhubung') {
+    return res.status(400).json({ error: 'WhatsApp belum terhubung.' });
+  }
+
+  const settings = db.prepare('SELECT key, value FROM settings').all().reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
+  const nominal = Number(settings.nominal_iuran_bulanan) || 0;
+
+  // Dummy data for testing
+  const monthsDue = 3;
+  const tunggakan = nominal * (monthsDue - 1);
+  const totalDue = nominal * monthsDue;
+
+  // Biaya admin withdrawal 2%
+  const withdrawalFee = Math.ceil(totalDue * 0.02);
+  const totalBilledToIPaymu = totalDue + withdrawalFee;
+
+  let paymentLink = '#';
+  const referenceId = `TEST-TX-${Date.now()}`;
+  const webhookUrl = process.env.WEBHOOK_DOMAIN ? `${process.env.WEBHOOK_DOMAIN}/api/ipaymu/callback` : 'https://google.com/api/ipaymu/callback';
+
+  try {
+    if (process.env.IPAYMU_VA) {
+       const payment = await createPayment({
+         product: `Tagihan Iuran - Test Broadcast (+Biaya Aplikasi 2%)`,
+         amount: totalBilledToIPaymu,
+         referenceId: referenceId,
+         buyerName: 'Warga Tester',
+         buyerPhone: phone,
+         notifyUrl: webhookUrl
+       });
+       paymentLink = payment.Url;
+
+       // Simpan DRAFT transaksi test sebagai "Pending"
+       db.prepare(`
+         INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, status, referenceId)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       `).run(
+         `tx-test-${Date.now()}`,
+         new Date().toISOString().split('T')[0],
+         'cat-1',
+         'Pemasukan',
+         totalDue,
+         `Pembayaran Test Broadcast (${monthsDue} bln)`,
+         null, // Tidak diasosiasikan dengan warga asli
+         new Date().getMonth() + 1,
+         new Date().getFullYear(),
+         'loc-default',
+         'Pending',
+         referenceId
+       );
+    }
+  } catch (err) {
+    console.error('iPaymu error:', err.message);
+  }
+
+  let message = template
+    .replace(/\{\{nama\}\}/g, 'Bapak/Ibu Tester')
+    .replace(/\{\{nomor_rumah\}\}/g, 'Blok X No. 99')
+    .replace(/\{\{nominal_bulan_ini\}\}/g, nominal.toLocaleString('id-ID'))
+    .replace(/\{\{nominal_tunggakan\}\}/g, tunggakan.toLocaleString('id-ID'))
+    .replace(/\{\{total_tagihan\}\}/g, totalDue.toLocaleString('id-ID'))
+    .replace(/\{\{jumlah_bulan\}\}/g, monthsDue)
+    .replace(/\{\{payment_link\}\}/g, paymentLink)
+    .replace(/\{\{rekening\}\}/g, settings.rekening_tujuan || '');
+
+  try {
+    const jid = `${phone.replace(/^0/, '62').replace(/\D/g, '')}@s.whatsapp.net`;
+    await sendMessage(jid, message);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('WA send test error:', err.message);
+    res.status(500).json({ error: 'Gagal mengirim pesan uji coba. Pastikan bot terhubung.' });
+  }
+});
+
+// =====================================================================
+// IPAYMU WEBHOOK (Callback)
+// Ditembak secara asinkron (dari belakang) oleh iPaymu saat warga selesai bayar.
+// =====================================================================
+app.post('/api/ipaymu/callback', async (req, res) => {
+  try {
+    // iPaymu mengirim data dalam format body urlencoded atau json
+    const { trx_id, reference_id, status_code, status } = req.body;
+
+    // Abaikan jika bukan notif transaksi sukses (Status code iPaymu untuk berhasil biasanya 1 atau 2, tergantung docs)
+    // status "berhasil" atau "sukses" (huruf kecil) biasanya dikirim.
+    if (!trx_id || !reference_id) {
+       return res.status(400).send('Bad Request');
+    }
+
+    // [SEC] JANGAN PERCAYA PAYLOAD BEGITU SAJA!
+    // Lakukan verifikasi balik (GET) ke iPaymu menggunakan trx_id.
+    const validData = await checkTransaction(trx_id);
+
+    // [SEC] Pastikan trx_id yang diverifikasi memang milik reference_id ini.
+    // Tanpa cek ini, trx_id sah milik transaksi lain bisa dipakai untuk melunasi tagihan siapa pun.
+    if (String(validData.ReferenceId) !== String(reference_id)) {
+      console.warn(`[Webhook] ReferenceId mismatch: trx ${trx_id} milik ${validData.ReferenceId}, bukan ${reference_id}`);
+      return res.status(400).send('Bad Request');
+    }
+
+    const tx = db.prepare('SELECT id, status, residentId FROM transactions WHERE referenceId = ?').get(reference_id);
+    if (!tx) return res.status(404).send('Not Found');
+    // Satu tagihan bisa terdiri dari beberapa baris (1 per bulan tertunggak)
+    const billedTotal = db.prepare('SELECT SUM(nominal) AS total FROM transactions WHERE referenceId = ?').get(reference_id).total;
+
+    const statusDesc = String(validData.StatusDesc || '').toLowerCase();
+    const paidAmount = Number(validData.Amount ?? validData.Total);
+
+    // Status 1 = Pending, 2 = Sukses/Berhasil, 3 = Gagal, 6 = Escrow (Dana tertahan sementara, biasanya dianggap sukses di sisi buyer)
+    // Sesuai dokumentasi iPaymu v2, "escrow" berarti buyer sudah bayar tapi dana masuk ke rekening penampungan iPaymu sementara. Kita anggap ini LUNAS untuk warga.
+    if (validData.Status === 2 || validData.Status === 6 || statusDesc === 'berhasil' || statusDesc === 'escrow') {
+      // [SEC] Nominal yang dibayar minimal harus sebesar tagihan
+      if (!(paidAmount >= billedTotal)) {
+        console.warn(`[Webhook] Nominal kurang untuk ${reference_id}: dibayar ${paidAmount}, tagihan ${billedTotal}`);
+        return res.status(400).send('Amount Mismatch');
+      }
+
+      if (tx.status === 'Pending') {
+        // Tandai sebagai lunas (Success)
+        db.prepare("UPDATE transactions SET status = 'Success' WHERE referenceId = ?").run(reference_id);
+        
+        // (Opsional) Kirim notifikasi WA ucapan terima kasih karena pembayaran berhasil terverifikasi otomatis.
+        try {
+          // Hanya kirim WA jika ini transaksi warga asli (residentId valid)
+          if (tx.residentId) {
+            const w = db.prepare('SELECT phone, namaKepalaKeluarga FROM warga WHERE id = ?').get(tx.residentId);
+            if (w && w.phone) {
+               const msg = `Terima kasih Bapak/Ibu ${w.namaKepalaKeluarga}, pembayaran iuran sebesar Rp ${paidAmount.toLocaleString('id-ID')} telah berhasil diverifikasi otomatis oleh sistem. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
+               const jid = `${w.phone.replace(/^0/, '62').replace(/\D/g, '')}@s.whatsapp.net`;
+               await sendMessage(jid, msg);
+            }
+          } else {
+             // Simulasi notifikasi untuk Test Broadcast
+             console.log(`[Testing] Sending real WA receipt to tester...`);
+             const msg = `Terima kasih Bapak/Ibu Tester, pembayaran iuran sebesar Rp ${paidAmount.toLocaleString('id-ID')} telah berhasil diverifikasi otomatis oleh sistem. (Ini adalah simulasi Webhook JepunKas) 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
+             const jid = `6285190321727@s.whatsapp.net`; // Hardcoded nomor tester
+             await sendMessage(jid, msg);
+          }
+        } catch (e) {
+          console.error('[Webhook WA Notify Error]', e.message);
+        }
+
+        console.log(`[Webhook] Payment Success for ${reference_id}`);
+        return res.status(200).send('OK');
+      } else if (tx.status === 'Success') {
+        // [EDGE-CASE] Transaksi sudah sukses (Mencegah double trigger / spam WhatsApp)
+        console.log(`[Webhook] Ignored duplicate success trigger for ${reference_id}`);
+        return res.status(200).send('Already Success');
+      }
+    } else if (validData.Status === 3 || validData.Status === 4) {
+      // Gagal / Expired
+      db.prepare("UPDATE transactions SET status = 'Failed' WHERE referenceId = ? AND status = 'Pending'").run(reference_id);
+    }
+
+    res.status(200).send('Ignored/Pending');
+  } catch (error) {
+    console.error('[Webhook Error]', error.message);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// =====================================================================
 // BACKUP & RESTORE - [SEC-07] Admin only + file validation
 // =====================================================================
 app.get('/api/backup', requireAdmin, async (req, res) => {
@@ -510,7 +874,7 @@ app.get('/api/backup-settings', requireAdmin, (req, res) => {
     const rows = db.prepare('SELECT * FROM settings').all();
     const settings = {};
     rows.forEach(r => settings[r.key] = r.value);
-    
+
     res.json({
       backup_interval: settings['backup_interval'] || 'Nonaktif',
       gdrive_backup_enabled: settings['gdrive_backup_enabled'] === 'true',
@@ -529,7 +893,7 @@ app.post('/api/backup-settings', requireAdmin, (req, res) => {
     const { backup_interval, gdrive_backup_enabled, gdrive_folder_id, gdrive_credentials } = req.body;
 
     const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
-    
+
     if (backup_interval) {
       stmt.run('backup_interval', sanitize(backup_interval));
     }
@@ -575,7 +939,7 @@ app.post('/api/backup-test', requireAdmin, async (req, res) => {
 
     const dataDir = path.join(__dirname, '..', 'data');
     const tempBackupPath = path.join(dataDir, 'backup-test-temp.sqlite');
-    
+
     // Backup DB
     await db.backup(tempBackupPath);
 
@@ -603,6 +967,37 @@ app.post('/api/backup-test', requireAdmin, async (req, res) => {
 // Ping endpoint
 app.get('/api/ping', (req, res) => res.send('pong'));
 
+// Payment Success Page (Redirect dari iPaymu)
+app.get('/payment-success', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Pembayaran Berhasil</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f3f4f6; text-align: center; }
+        .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-width: 90%; width: 400px; }
+        .icon { color: #10b981; width: 64px; height: 64px; margin: 0 auto 1rem; }
+        h1 { color: #111827; margin: 0 0 0.5rem; font-size: 1.5rem; }
+        p { color: #6b7280; margin: 0 0 1.5rem; font-size: 0.95rem; line-height: 1.5; }
+        a { display: inline-block; background-color: #f43f5e; color: white; text-decoration: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; transition: background-color 0.2s; }
+        a:hover { background-color: #e11d48; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <h1>Pembayaran Diproses!</h1>
+        <p>Terima kasih, instruksi pembayaran Anda telah kami terima. Jika Anda sudah melakukan transfer, sistem akan otomatis memverifikasi dan mengirimkan bukti lunas (struk) ke WhatsApp Anda beberapa saat lagi.</p>
+        <a href="/">Tutup Halaman Ini</a>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
 // SPA fallback — any non-API route serves index.html (must be after all API routes)
 app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
@@ -619,5 +1014,6 @@ app.use((err, req, res, _next) => {
 const host = process.env.HOST || '127.0.0.1';
 app.listen(port, host, () => {
   console.log(`JepunKas API running on ${host}:${port}`);
-  startBackupScheduler();
+  startBackupScheduler(executeBroadcast);
+  connectToWhatsApp().catch(err => console.error('WhatsApp Init Error:', err));
 });

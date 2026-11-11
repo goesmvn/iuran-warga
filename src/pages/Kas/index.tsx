@@ -214,7 +214,7 @@ export default function Kas() {
     if (!locId) return;
 
     // Hitung saldo sistem saat ini untuk kas terpilih
-    const targetKasTxs = transactions.filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === locId);
+    const targetKasTxs = transactions.filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === locId && (!t.status || t.status === 'Success'));
     const totalMasuk = targetKasTxs.filter(t => t.type === "Pemasukan").reduce((s, t) => s + t.nominal, 0);
     const totalKeluar = targetKasTxs.filter(t => t.type === "Pengeluaran").reduce((s, t) => s + t.nominal, 0);
     const saldoSistem = totalMasuk - totalKeluar;
@@ -268,7 +268,7 @@ export default function Kas() {
   // Saldo per lokasi kas (all-time, seluruh riwayat transaksi lokasi tsb)
   const kasBalances = useMemo(() => {
     return locations.map(loc => {
-      const txs = transactions.filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === loc.id);
+      const txs = transactions.filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === loc.id && (!t.status || t.status === 'Success'));
       const masuk = txs.filter(t => t.type === "Pemasukan").reduce((s, t) => s + t.nominal, 0);
       const keluar = txs.filter(t => t.type === "Pengeluaran").reduce((s, t) => s + t.nominal, 0);
       return { ...loc, saldo: masuk - keluar };
@@ -311,7 +311,7 @@ export default function Kas() {
   // Filtered & Sorted Transactions (Buku Besar)
   // Hanya menampilkan transaksi dengan nominal > 0 (koreksi rekap Rp 0 hanya ada di Laporan Rekap, tidak masuk Buku Besar)
   const processedTransactions = useMemo(() => {
-    let result = transactions.filter(t => t.nominal > 0);
+    let result = transactions.filter(t => t.nominal > 0 && (!t.status || t.status === 'Success'));
 
     // Filter Type
     if (selectedType !== "Semua") {

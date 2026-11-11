@@ -37,7 +37,10 @@ services:
       # [WAJIB] Diisi via Komodo Environment Variables UI
       # Jangan hardcode di sini!
       - JWT_SECRET=${JWT_SECRET}
-      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3088}
+      - IPAYMU_VA=${IPAYMU_VA}
+      - IPAYMU_API_KEY=${IPAYMU_API_KEY}
+      - IPAYMU_URL=${IPAYMU_URL}
+      - WEBHOOK_DOMAIN=${WEBHOOK_DOMAIN}
 
     # Resource limits (sesuaikan dengan spesifikasi VPS Anda)
     deploy:

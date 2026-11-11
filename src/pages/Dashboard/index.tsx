@@ -8,9 +8,14 @@ import {
   TrendingDown,
   Users,
   AlertTriangle,
-  Landmark
+  Landmark,
+  MessageCircle
 } from "lucide-react";
 import { Link } from "react-router-dom";
+
+import { useConfirm } from "../../contexts/ConfirmContext";
+import { useState } from "react";
+import { apiFetch } from "../../utils/apiFetch";
 
 export default function Dashboard() {
   const { transactions } = useTransaksi();
@@ -23,10 +28,10 @@ export default function Dashboard() {
   // --- Summary Metrics (memoized for performance) ---
   const { currentBalance } = useMemo(() => {
     const totalIn = transactions
-      .filter((t) => t.type === "Pemasukan")
+      .filter((t) => t.type === "Pemasukan" && (!t.status || t.status === "Success"))
       .reduce((sum, t) => sum + t.nominal, 0);
     const totalOut = transactions
-      .filter((t) => t.type === "Pengeluaran")
+      .filter((t) => t.type === "Pengeluaran" && (!t.status || t.status === "Success"))
       .reduce((sum, t) => sum + t.nominal, 0);
     return { totalIn, totalOut, currentBalance: totalIn - totalOut };
   }, [transactions]);
@@ -34,10 +39,10 @@ export default function Dashboard() {
   const locationBalances = useMemo(() => {
     return locations.map(loc => {
       const locIn = transactions
-        .filter(t => t.type === 'Pemasukan' && (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID)))
+        .filter(t => t.type === 'Pemasukan' && (!t.status || t.status === "Success") && (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID)))
         .reduce((sum, t) => sum + t.nominal, 0);
       const locOut = transactions
-        .filter(t => t.type === 'Pengeluaran' && (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID)))
+        .filter(t => t.type === 'Pengeluaran' && (!t.status || t.status === "Success") && (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID)))
         .reduce((sum, t) => sum + t.nominal, 0);
       return { ...loc, balance: locIn - locOut };
     });
@@ -48,6 +53,7 @@ export default function Dashboard() {
       .filter(
         (t) =>
           t.type === "Pemasukan" &&
+          (!t.status || t.status === "Success") &&
           t.categoryId !== "cat-saldo-awal" &&
           t.categoryId !== "cat-transfer" &&
           new Date(t.date).getMonth() + 1 === currentMonth &&
@@ -58,6 +64,7 @@ export default function Dashboard() {
       .filter(
         (t) =>
           t.type === "Pengeluaran" &&
+          (!t.status || t.status === "Success") &&
           t.categoryId !== "cat-transfer" &&
           new Date(t.date).getMonth() + 1 === currentMonth &&
           new Date(t.date).getFullYear() === currentYear,
@@ -70,10 +77,10 @@ export default function Dashboard() {
     return Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
       const inThisMonth = transactions
-        .filter(t => t.type === "Pemasukan" && t.categoryId !== "cat-saldo-awal" && t.categoryId !== "cat-transfer" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
+        .filter(t => t.type === "Pemasukan" && (!t.status || t.status === "Success") && t.categoryId !== "cat-saldo-awal" && t.categoryId !== "cat-transfer" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
         .reduce((sum, t) => sum + t.nominal, 0);
       const outThisMonth = transactions
-        .filter(t => t.type === "Pengeluaran" && t.categoryId !== "cat-transfer" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
+        .filter(t => t.type === "Pengeluaran" && (!t.status || t.status === "Success") && t.categoryId !== "cat-transfer" && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === currentYear)
         .reduce((sum, t) => sum + t.nominal, 0);
       return { month, in: inThisMonth, out: outThisMonth };
     });
@@ -81,6 +88,39 @@ export default function Dashboard() {
 
   const maxAmount = Math.max(...monthlyData.flatMap(d => [d.in, d.out]), 1);
 
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const { alert: customAlert, confirm } = useConfirm();
+
+  const handleBroadcast = async () => {
+    const isConfirmed = await confirm(
+      'Broadcast Tagihan',
+      `Fitur ini akan mengirimkan pesan WhatsApp ke *${arrearsCount} warga* yang memiliki tunggakan. Bot secara otomatis menghitung tunggakan dan menyisipkan link pembayaran. Lanjutkan?`,
+      'info'
+    );
+    if (!isConfirmed) return;
+
+    setIsBroadcasting(true);
+    try {
+      const settingsRes = await apiFetch('/api/settings');
+      const settings = await settingsRes.json();
+      
+      const res = await apiFetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: settings['wa_template_tunggakan'] || '' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await customAlert('Broadcast Selesai', `Berhasil mengirim ke ${data.successCount} warga. Gagal: ${data.failCount}`, 'success');
+      } else {
+        await customAlert('Broadcast Gagal', data.error || 'Terjadi kesalahan.', 'error');
+      }
+    } catch (e) {
+      await customAlert('Error', 'Gagal menghubungi server.', 'error');
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
   // Tunggakan: Warga aktif yang belum bayar bulan ini
   const { arrearsCount } = useMemo(() => {
     const paidThisMonthIds = new Set(
@@ -88,6 +128,7 @@ export default function Dashboard() {
         .filter(
           (t) =>
             t.type === "Pemasukan" &&
+            (!t.status || t.status === "Success") &&
             t.categoryId !== "cat-saldo-awal" &&
             t.periodeBulan === currentMonth &&
             t.periodeTahun === currentYear,
@@ -97,7 +138,7 @@ export default function Dashboard() {
     const arrearsCount = warga.filter(
       (w) => w.status === "Aktif" && !paidThisMonthIds.has(w.id),
     ).length;
-    return { paidThisMonthIds, arrearsCount };
+    return { arrearsCount };
   }, [transactions, warga, currentMonth, currentYear]);
 
   return (
@@ -202,6 +243,17 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div className="flex justify-end">
+        <button
+          onClick={handleBroadcast}
+          disabled={isBroadcasting || arrearsCount === 0}
+          className="px-6 py-3 bg-[#25D366] hover:bg-[#128C7E] disabled:bg-gray-300 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2"
+        >
+          <MessageCircle className="w-5 h-5" />
+          {isBroadcasting ? 'Mengirim Broadcast...' : `Broadcast WA Tunggakan (${arrearsCount} KK)`}
+        </button>
+      </div>
+
       <h3 className="font-bold text-gray-800 flex items-center gap-2 pt-2">
         <Landmark className="w-5 h-5 text-brand-600" /> Pos Penyimpanan Kas
       </h3>
@@ -278,7 +330,7 @@ export default function Dashboard() {
                 Riwayat Transaksi Masuk (Bulan Ini)
               </span>
               <span className="font-bold text-green-600">
-                {transactions.filter(t => t.type === 'Pemasukan' && t.categoryId !== 'cat-saldo-awal' && new Date(t.date).getMonth() + 1 === currentMonth && new Date(t.date).getFullYear() === currentYear).length}
+                {transactions.filter(t => t.type === 'Pemasukan' && (!t.status || t.status === "Success") && t.categoryId !== 'cat-saldo-awal' && new Date(t.date).getMonth() + 1 === currentMonth && new Date(t.date).getFullYear() === currentYear).length}
               </span>
             </li>
           </ul>

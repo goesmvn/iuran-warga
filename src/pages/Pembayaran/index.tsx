@@ -124,7 +124,7 @@ export default function Pembayaran() {
     const tahunanCids = categories.filter(c => c.name.toLowerCase().includes("tahunan") || c.periode === "Tahunan").map(c => c.id);
 
     const paidTransactions = transactions.filter(
-      (t) => t.type === "Pemasukan" && t.residentId === residentId
+      (t) => t.type === "Pemasukan" && t.residentId === residentId && (!t.status || t.status === "Success")
     );
 
     paidTransactions.forEach(t => {
