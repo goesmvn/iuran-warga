@@ -11,3 +11,8 @@ data/
 
 # macOS
 .DS_Store
+
+# Kunci tanda tangan Android — JANGAN di-commit
+*.jks
+*.keystore
+keystore.properties

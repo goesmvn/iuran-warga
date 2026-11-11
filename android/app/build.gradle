@@ -21,8 +21,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Kunci tanda tangan rilis disimpan DI LUAR repo (~/.jepunkas-keystore/keystore.properties).
+    // Path bisa diganti lewat env JEPUNKAS_KEYSTORE_PROPERTIES. Tanpa file ini, build release tidak ditandatangani.
+    def keystorePropsFile = file(System.getenv('JEPUNKAS_KEYSTORE_PROPERTIES') ?: "${System.getProperty('user.home')}/.jepunkas-keystore/keystore.properties")
+    if (keystorePropsFile.exists()) {
+        def keystoreProps = new Properties()
+        keystorePropsFile.withInputStream { keystoreProps.load(it) }
+        signingConfigs {
+            release {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystorePropsFile.exists()) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
