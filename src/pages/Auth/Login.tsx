@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Lock, User as UserIcon } from 'lucide-react';
 import { JepunIcon } from '../../components/JepunIcon';
+import { apiUrl, isNativeApp } from '../../utils/apiFetch';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -19,10 +20,10 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/login', {
+      const res = await fetch(apiUrl('/api/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, client: isNativeApp ? 'android' : undefined })
       });
       const data = await res.json();
       

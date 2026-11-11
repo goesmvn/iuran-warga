@@ -11,9 +11,13 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "replace": "node replace_colors.js"
+    "replace": "node replace_colors.js",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.10.0",
     "cors": "^2.8.6",
@@ -29,6 +33,7 @@
     "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@eslint/js": "^9.39.1",
     "@tailwindcss/vite": "^4.2.1",
     "@types/node": "^24.10.1",

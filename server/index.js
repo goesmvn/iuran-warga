@@ -92,6 +92,11 @@ const sanitizeNum = (val) => {
   return isNaN(n) || n < 0 ? 0 : Math.floor(n);
 };
 
+// Aplikasi Android menyimpan data offline lalu mengirim ulang (retry) saat online.
+// Jika request sebelumnya sudah sampai ke server tapi responsnya hilang, retry akan membawa ID yang sama:
+// anggap sukses agar data tidak dobel dan antrean di HP bisa lanjut.
+const alreadyExists = (table, id) => !!db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id);
+
 // =====================================================================
 // AUTH
 // =====================================================================
@@ -114,10 +119,12 @@ app.post('/api/login', loginLimiter, (req, res) => {
     return res.status(401).json({ error: 'Username atau password salah!' });
   }
 
+  // Aplikasi Android dipakai offline berhari-hari, jadi sesi dibuat lebih panjang
+  const isMobileApp = req.body?.client === 'android';
   const token = jwt.sign(
     { id: user.id, username: user.username, role: user.role },
     EFFECTIVE_JWT_SECRET,
-    { expiresIn: '12h' }
+    { expiresIn: isMobileApp ? '30d' : '12h' }
   );
   res.json({ token, user: { id: user.id, username: user.username, name: user.name, role: user.role } });
 });
@@ -271,6 +278,7 @@ app.post('/api/warga', (req, res) => {
 
   if (!nama || !nomorRumah) return res.status(400).json({ error: 'Nama dan nomor rumah wajib diisi.' });
   if (!['Aktif', 'Pindah'].includes(status)) return res.status(400).json({ error: 'Status tidak valid.' });
+  if (alreadyExists('warga', id)) return res.json({ success: true, id });
 
   db.prepare('INSERT INTO warga (id, namaKepalaKeluarga, nomorRumah, status, phone, roleWarga, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, nama, nomorRumah, status, noHp, roleWarga, tanggalMasuk || new Date().toISOString());
   res.json({ success: true, id });
@@ -328,6 +336,17 @@ app.post('/api/transactions', (req, res) => {
   if (!date || !categoryId) return res.status(400).json({ error: 'Tanggal dan kategori wajib diisi.' });
   if (!['Pemasukan', 'Pengeluaran'].includes(type)) return res.status(400).json({ error: 'Tipe transaksi tidak valid.' });
   if (nominal < 0) return res.status(400).json({ error: 'Nominal tidak boleh negatif.' });
+  if (alreadyExists('transactions', id)) return res.json({ success: true, id });
+
+  // Cegah pembayaran ganda untuk periode yang sama (mis. dua HP mencatat offline untuk warga yang sama)
+  if (type === 'Pemasukan' && residentId && periodeTahun) {
+    const dup = db.prepare('SELECT id FROM transactions WHERE type = ? AND residentId = ? AND categoryId = ? AND periodeTahun = ? AND periodeBulan IS ?')
+      .get('Pemasukan', residentId, categoryId, periodeTahun, periodeBulan);
+    if (dup) {
+      const periode = periodeBulan ? `${periodeBulan}/${periodeTahun}` : `tahun ${periodeTahun}`;
+      return res.status(409).json({ error: `Pembayaran untuk periode ${periode} sudah tercatat sebelumnya.` });
+    }
+  }
 
   try {
     db.prepare('INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, transferId, transferToKasLocationId);
@@ -360,6 +379,8 @@ app.post('/api/kas-locations', requireAdmin, (req, res) => {
 
   if (!name) return res.status(400).json({ error: 'Nama lokasi wajib diisi.' });
   if (!['Tunai', 'Bank', 'E-Wallet'].includes(type)) return res.status(400).json({ error: 'Tipe lokasi tidak valid.' });
+
+  if (alreadyExists('kas_locations', id)) return res.json({ success: true, id });
 
   db.prepare('INSERT INTO kas_locations (id, name, type, description) VALUES (?, ?, ?, ?)').run(id, name, type, description);
   res.json({ success: true, id });
@@ -406,6 +427,8 @@ app.post('/api/categories', requireAdmin, (req, res) => {
   if (!name) return res.status(400).json({ error: 'Nama kategori wajib diisi.' });
   if (!['Pemasukan', 'Pengeluaran'].includes(type)) return res.status(400).json({ error: 'Tipe tidak valid.' });
   if (!['Bulanan', 'Tahunan', 'Insidental'].includes(periode)) return res.status(400).json({ error: 'Periode tidak valid.' });
+
+  if (alreadyExists('categories', id)) return res.json({ success: true, id });
 
   db.prepare('INSERT INTO categories (id, name, type, defaultNominal, periode) VALUES (?, ?, ?, ?, ?)').run(id, name, type, defaultNominal, periode);
   res.json({ success: true, id });

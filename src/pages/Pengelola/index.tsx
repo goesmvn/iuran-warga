@@ -3,7 +3,7 @@ import { useUsers } from '../../hooks/useUsers';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
 import { Shield, Trash2, Plus, X, Settings, Download, Upload, Database, MapPin, Users, CalendarDays, Landmark, Edit2 } from 'lucide-react';
-import { apiFetch } from '../../utils/apiFetch';
+import { apiFetch, apiUrl } from '../../utils/apiFetch';
 import { useConfirm } from '../../contexts/ConfirmContext';
 
 type SettingsTab = 'pengguna' | 'pengaturan' | 'identitas' | 'backup';
@@ -104,7 +104,7 @@ export default function Pengelola() {
     setIsRestoring(true);
     try {
       const buffer = await file.arrayBuffer();
-      const res = await fetch('/api/restore', {
+      const res = await fetch(apiUrl('/api/restore'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/octet-stream' },
         body: buffer

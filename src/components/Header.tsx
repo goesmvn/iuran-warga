@@ -1,4 +1,5 @@
 import { Menu, Bell } from "lucide-react";
+import { SyncStatus } from "./SyncStatus";
 
 export function Header({ setMobileOpen }: { setMobileOpen: (open: boolean) => void }) {
     return (
@@ -14,6 +15,7 @@ export function Header({ setMobileOpen }: { setMobileOpen: (open: boolean) => vo
             </div>
 
             <div className="flex items-center gap-4">
+                <SyncStatus />
                 <button className="relative p-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100 transition-colors">
                     <Bell className="w-5 h-5" />
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-500 rounded-full border-2 border-white"></span>

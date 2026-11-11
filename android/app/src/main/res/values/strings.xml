@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">JepunKas</string>
+    <string name="title_activity_main">JepunKas</string>
+    <string name="package_name">id.arcomteknologi.jepunkas</string>
+    <string name="custom_url_scheme">id.arcomteknologi.jepunkas</string>
+</resources>
