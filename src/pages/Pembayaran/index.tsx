@@ -17,6 +17,7 @@ import {
 import type { Transaction } from "../../types";
 import { ReceiptModal, type ReceiptData } from "../../components/ReceiptModal";
 import { useConfirm } from "../../contexts/ConfirmContext";
+import { unpaidMonthsInYear } from "../../utils/iuran";
 
 export default function Pembayaran() {
   const { transactions, addTransaction } = useTransaksi();
@@ -169,11 +170,8 @@ export default function Pembayaran() {
     let totalUnpaid = 0;
 
     for (let y = currentYear; y >= startYear; y--) {
-        let paidCount = 0;
-        for (let i = 1; i <= 12; i++) {
-            if (anyPaidSet.has(`${y}-${i}`)) paidCount++;
-        }
-        const unpaid = 12 - paidCount;
+        // Hanya bulan yang sudah jatuh tempo (tahun ini: s/d bulan berjalan)
+        const unpaid = unpaidMonthsInYear(anyPaidSet, y).length;
         if (unpaid > 0) {
             const nominal = unpaid * totalBulananNominal;
             arrearsList.push({ year: y, unpaid, nominal });

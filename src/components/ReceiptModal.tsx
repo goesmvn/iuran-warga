@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { Printer, X, Bluetooth } from "lucide-react";
+import { useRef, useState } from "react";
+import { Printer, X, Share2 } from "lucide-react";
 import { JepunIcon } from "./JepunIcon";
+import { BluetoothPrintButton } from "./BluetoothPrintButton";
 import { useSettings } from "../hooks/useSettings";
 import { isNativeApp } from "../utils/apiFetch";
-import { getPrinterConfig, listPairedPrinters, printReceipt, savePrinterConfig, type PrinterConfig, type PrinterDevice } from "../utils/bluetoothPrinter";
+import { buildReceipt } from "../utils/bluetoothPrinter";
+import { safeFileName, shareElementAsImage } from "../utils/shareImage";
 
 type ReceiptItem = {
   title: string;
@@ -28,53 +30,28 @@ interface ReceiptModalProps {
 
 export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
   const { settings } = useSettings();
-  const [printerConfig, setPrinterConfig] = useState<PrinterConfig | null>(getPrinterConfig);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [devices, setDevices] = useState<PrinterDevice[]>([]);
-  const [paperWidth, setPaperWidth] = useState<58 | 80>(printerConfig?.paperWidth ?? 58);
-  const [printStatus, setPrintStatus] = useState<{ type: "info" | "error" | "success"; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   if (!isOpen || !data) return null;
 
-  const openPicker = async () => {
-    setPrintStatus(null);
-    setPickerOpen(true);
+  const handleShare = async () => {
+    if (!receiptRef.current) return;
+    setSharing(true);
+    setShareError(null);
     try {
-      setDevices(await listPairedPrinters());
+      const org = settings['nama_organisasi'] || 'Iuran Warga';
+      await shareElementAsImage(
+        receiptRef.current,
+        safeFileName('Bukti-Bayar', data.residentName, data.transactionId),
+        `Bukti pembayaran ${org} - ${data.residentName} (${data.residentBlock}) - Total Rp ${data.total.toLocaleString('id-ID')} - Ref ${data.transactionId}`
+      );
     } catch (err) {
-      setPrintStatus({ type: "error", text: err instanceof Error ? err.message : "Gagal membaca daftar Bluetooth." });
-    }
-  };
-
-  const printTo = async (config: PrinterConfig) => {
-    setBusy(true);
-    setPrintStatus({ type: "info", text: `Mencetak ke ${config.name}...` });
-    try {
-      await printReceipt(data, settings, config);
-      setPrintStatus({ type: "success", text: "Struk berhasil dicetak." });
-    } catch (err) {
-      setPrintStatus({ type: "error", text: err instanceof Error ? err.message : "Gagal mencetak." });
+      setShareError(err instanceof Error ? err.message : 'Gagal membagikan bukti pembayaran.');
     } finally {
-      setBusy(false);
+      setSharing(false);
     }
-  };
-
-  const selectPrinter = (device: PrinterDevice) => {
-    const config: PrinterConfig = { address: device.address, name: device.name, paperWidth };
-    savePrinterConfig(config);
-    setPrinterConfig(config);
-    setPickerOpen(false);
-    printTo(config);
-  };
-
-  const handlePrint = () => {
-    if (!isNativeApp) {
-      window.print();
-      return;
-    }
-    if (printerConfig) printTo(printerConfig);
-    else openPicker();
   };
 
   return (
@@ -116,7 +93,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
 
         {/* Scrollable Receipt Area */}
         <div className="flex-1 overflow-y-auto print:overflow-visible">
-          <div className="p-6 sm:p-8 print:p-0 bg-white text-gray-900 font-mono text-[13px] print:text-[11px] leading-relaxed">
+          <div ref={receiptRef} className="p-6 sm:p-8 print:p-0 bg-white text-gray-900 font-mono text-[13px] print:text-[11px] leading-relaxed">
             
             {/* Header Struk */}
             <div className="text-center mb-6">
@@ -184,63 +161,25 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
 
         {/* Footer Actions (No Print) */}
         <div className="p-5 border-t border-gray-100 bg-white print:hidden space-y-3">
-          {pickerOpen && (
-            <div className="border border-gray-200 rounded-xl p-3 space-y-3 text-sm">
-              <div className="flex justify-between items-center">
-                <p className="font-bold text-gray-800">Pilih Printer Bluetooth</p>
-                <button type="button" onClick={() => setPickerOpen(false)} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-              </div>
-              <div className="flex gap-2">
-                {([58, 80] as const).map(w => (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => setPaperWidth(w)}
-                    className={`flex-1 py-1.5 rounded-lg border font-bold ${paperWidth === w ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600"}`}
-                  >
-                    Kertas {w}mm
-                  </button>
-                ))}
-              </div>
-              {devices.length === 0 ? (
-                <p className="text-gray-500 text-xs">Belum ada printer. Pair printer dulu di Pengaturan Bluetooth HP, lalu buka lagi daftar ini.</p>
-              ) : (
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {devices.map(d => (
-                    <button
-                      key={d.address}
-                      type="button"
-                      onClick={() => selectPrinter(d)}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 border border-gray-100"
-                    >
-                      <p className="font-semibold text-gray-800">{d.name}</p>
-                      <p className="text-[10px] text-gray-500">{d.address}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {printStatus && (
-            <p className={`text-xs font-semibold text-center ${printStatus.type === "error" ? "text-red-600" : printStatus.type === "success" ? "text-green-600" : "text-gray-600"}`}>
-              {printStatus.text}
-            </p>
-          )}
-
-          <button
-            onClick={handlePrint}
-            disabled={busy}
-            className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-60 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-lg"
-          >
-            {isNativeApp ? <Bluetooth className="w-5 h-5" /> : <Printer className="w-5 h-5" />} {busy ? "Mencetak..." : "Cetak Struk"}
-          </button>
-
-          {isNativeApp && printerConfig && !pickerOpen && (
-            <button type="button" onClick={openPicker} className="w-full text-xs text-gray-500 hover:text-gray-800">
-              Printer: <b>{printerConfig.name}</b> ({printerConfig.paperWidth}mm) · Ganti
+          {isNativeApp ? (
+            <BluetoothPrintButton build={(paperWidth) => buildReceipt(data, settings, paperWidth)} />
+          ) : (
+            <button
+              onClick={() => window.print()}
+              className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-lg"
+            >
+              <Printer className="w-5 h-5" /> Cetak Struk
             </button>
           )}
+          <button
+            type="button"
+            onClick={handleShare}
+            disabled={sharing}
+            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 px-4 rounded-xl transition-colors"
+          >
+            <Share2 className="w-5 h-5" /> {sharing ? "Menyiapkan gambar..." : "Bagikan Bukti Bayar"}
+          </button>
+          {shareError && <p className="text-xs font-semibold text-center text-red-600">{shareError}</p>}
         </div>
       </div>
     </div>

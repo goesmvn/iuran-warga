@@ -167,6 +167,71 @@ export function buildReceipt(data: ReceiptData, settings: Record<string, string>
   return p.toBase64();
 }
 
-export async function printReceipt(data: ReceiptData, settings: Record<string, string>, config: PrinterConfig) {
-  await BluetoothPrinter.print({ address: config.address, data: buildReceipt(data, settings, config.paperWidth) });
+export async function printRaw(config: PrinterConfig, base64Data: string) {
+  await BluetoothPrinter.print({ address: config.address, data: base64Data });
+}
+
+const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+export interface KartuData {
+  year: number;
+  residentName: string;
+  residentBlock: string;
+  residentStatus: string;
+  paidMonths: Set<number>;
+  incidental: { date: string; name: string; nominal: number }[];
+  bendahara: string;
+}
+
+/** Kartu iuran tahunan untuk printer thermal: status 12 bulan + iuran insidental. */
+export function buildKartu(data: KartuData, settings: Record<string, string>, paperWidth: 58 | 80) {
+  const p = new EscPos(paperWidth);
+  const half = Math.floor(p.cols / 2);
+
+  p.align('center').bold(true).doubleHeight(true)
+    .wrap((settings['nama_organisasi'] || settings['rt_name'] || 'Organisasi Warga').toUpperCase())
+    .doubleHeight(false).bold(false);
+  if (settings['nama_desa']) p.wrap(settings['nama_desa']);
+  p.line('KARTU PEMBAYARAN IURAN');
+
+  p.align('left').divider()
+    .pair('Tahun Buku', String(data.year))
+    .bold(true).wrap(`Nama: ${data.residentName.toUpperCase()}`).bold(false)
+    .pair('Blok/No', data.residentBlock)
+    .pair('Status', data.residentStatus)
+    .divider()
+    .line('IURAN POKOK BULANAN:');
+
+  // 2 kolom bulan per baris, mis. "Januari  LUNAS | Februari     -"
+  for (let m = 1; m <= 12; m += 2) {
+    const cell = (month: number) => {
+      const status = data.paidMonths.has(month) ? 'LUNAS' : '-';
+      const name = MONTHS[month - 1].slice(0, half - status.length - 2);
+      return name + ' '.repeat(Math.max(1, half - 1 - name.length - status.length)) + status;
+    };
+    p.line(`${cell(m)} ${cell(m + 1)}`.slice(0, p.cols));
+  }
+  p.pair('Total lunas', `${data.paidMonths.size}/12 bulan`).divider();
+
+  p.line('IURAN INSIDENTAL / LAINNYA:');
+  if (data.incidental.length === 0) {
+    p.line('Tidak ada.');
+  } else {
+    let total = 0;
+    for (const item of data.incidental) {
+      p.wrap(`${item.date} ${item.name}`).align('right').line(rupiah(item.nominal)).align('left');
+      total += item.nominal;
+    }
+    p.bold(true).pair('Total insidental', rupiah(total)).bold(false);
+  }
+
+  p.divider().align('center')
+    .line(`Dicetak ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`)
+    .line('Pengurus Kas / Bendahara')
+    .feed(3)
+    .bold(true).wrap(data.bendahara).bold(false)
+    .feed(4)
+    .cut();
+
+  return p.toBase64();
 }

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Papa from "papaparse";
 import { useConfirm } from "../../contexts/ConfirmContext";
+import { buildPaidMonthIndex, unpaidMonthsInYear } from "../../utils/iuran";
 
 export default function Laporan() {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransaksi();
@@ -159,39 +160,14 @@ export default function Laporan() {
 
   // === TUNGGAKAN LOGIC ===
   const arrearsList = useMemo(() => {
-    const paidResidentsForPeriod = new Set(
-      transactions
-        .filter(
-          (t) =>
-            t.type === "Pemasukan" &&
-            (!t.status || t.status === "Success") &&
-            t.periodeBulan === filterMonth &&
-            t.periodeTahun === filterYear,
-        )
-        .map((t) => t.residentId),
-    );
+    const paidIndex = buildPaidMonthIndex(transactions, categories);
 
     let list = warga
       .filter((w) => w.status === "Aktif")
-      .filter((w) => !paidResidentsForPeriod.has(w.id))
-      .map((w) => {
-        const paidMonthsThisYear = new Set(
-          transactions
-            .filter(
-              (t) =>
-                t.type === "Pemasukan" &&
-                (!t.status || t.status === "Success") &&
-                t.residentId === w.id &&
-                t.periodeTahun === filterYear,
-            )
-            .map((t) => t.periodeBulan),
-        );
-        const missedMonthsCount = filterMonth - paidMonthsThisYear.size;
-        return {
-          ...w,
-          missedMonthsCount: Math.max(0, missedMonthsCount),
-        };
-      });
+      .map((w) => ({ w, unpaid: unpaidMonthsInYear(paidIndex.get(w.id), filterYear, filterMonth) }))
+      // Masuk daftar jika bulan yang difilter belum lunas (rapelan tahunan dihitung lunas)
+      .filter(({ unpaid }) => unpaid.includes(filterMonth))
+      .map(({ w, unpaid }) => ({ ...w, missedMonthsCount: unpaid.length }));
 
     if (searchQuery.trim() !== "") {
       const query = searchQuery.toLowerCase();
@@ -202,7 +178,7 @@ export default function Laporan() {
     }
 
     return list.sort((a, b) => b.missedMonthsCount - a.missedMonthsCount);
-  }, [transactions, warga, filterMonth, filterYear, searchQuery]);
+  }, [transactions, categories, warga, filterMonth, filterYear, searchQuery]);
 
   // === REKAPITULASI MATRIKS LOGIC ===
   const bulananCids = useMemo(() => categories.filter(c => c.name.toLowerCase().includes("bulanan") || c.periode === "Bulanan").map(c => c.id), [categories]);

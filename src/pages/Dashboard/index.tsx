@@ -16,9 +16,12 @@ import { Link } from "react-router-dom";
 import { useConfirm } from "../../contexts/ConfirmContext";
 import { useState } from "react";
 import { apiFetch } from "../../utils/apiFetch";
+import { buildPaidMonthIndex } from "../../utils/iuran";
+import { useCategory } from "../../hooks/useCategory";
 
 export default function Dashboard() {
   const { transactions } = useTransaksi();
+  const { categories } = useCategory();
   const { warga } = useWarga();
   const { locations } = useKasLocation();
 
@@ -121,25 +124,14 @@ export default function Dashboard() {
       setIsBroadcasting(false);
     }
   };
-  // Tunggakan: Warga aktif yang belum bayar bulan ini
+  // Tunggakan: Warga aktif yang belum lunas bulan ini (rapelan tahunan dihitung lunas)
   const { arrearsCount } = useMemo(() => {
-    const paidThisMonthIds = new Set(
-      transactions
-        .filter(
-          (t) =>
-            t.type === "Pemasukan" &&
-            (!t.status || t.status === "Success") &&
-            t.categoryId !== "cat-saldo-awal" &&
-            t.periodeBulan === currentMonth &&
-            t.periodeTahun === currentYear,
-        )
-        .map((t) => t.residentId),
-    );
+    const paidIndex = buildPaidMonthIndex(transactions, categories);
     const arrearsCount = warga.filter(
-      (w) => w.status === "Aktif" && !paidThisMonthIds.has(w.id),
+      (w) => w.status === "Aktif" && !paidIndex.get(w.id)?.has(`${currentYear}-${currentMonth}`),
     ).length;
     return { arrearsCount };
-  }, [transactions, warga, currentMonth, currentYear]);
+  }, [transactions, categories, warga, currentMonth, currentYear]);
 
   return (
     <div className="animate-in fade-in duration-500 space-y-6">

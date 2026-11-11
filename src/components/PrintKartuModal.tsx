@@ -1,9 +1,13 @@
-import { useState, useMemo } from "react";
-import { X, Printer, Check } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { X, Printer, Check, Share2 } from "lucide-react";
 import { useTransaksi } from "../hooks/useTransaksi";
 import { useCategory } from "../hooks/useCategory";
 import { useSettings } from "../hooks/useSettings";
 import { JepunIcon } from "./JepunIcon";
+import { BluetoothPrintButton } from "./BluetoothPrintButton";
+import { isNativeApp } from "../utils/apiFetch";
+import { buildKartu } from "../utils/bluetoothPrinter";
+import { safeFileName, shareElementAsImage } from "../utils/shareImage";
 import type { Resident } from "../types";
 
 interface PrintKartuModalProps {
@@ -21,13 +25,17 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [isThermal, setIsThermal] = useState(false);
   const yearOptions = Array.from({length: 7}, (_, i) => currentYear - 2 + i);
+  const kartuRef = useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const bulananCids = useMemo(() => categories.filter(c => c.name.toLowerCase().includes("bulanan") || c.periode === "Bulanan").map(c => c.id), [categories]);
   const tahunanCids = useMemo(() => categories.filter(c => c.name.toLowerCase().includes("tahunan") || c.periode === "Tahunan").map(c => c.id), [categories]);
 
   const residentTx = useMemo(() => {
      if (!warga) return [];
-     return transactions.filter(t => t.residentId === warga.id && t.type === "Pemasukan");
+     // Tagihan iPaymu yang masih Pending/Failed belum dibayar, jangan ditandai LUNAS
+     return transactions.filter(t => t.residentId === warga.id && t.type === "Pemasukan" && (!t.status || t.status === "Success"));
   }, [transactions, warga]);
 
   const paidMonths = useMemo(() => {
@@ -70,6 +78,37 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
          setIsThermal(false); // Reset back after print dialog closes
       }, 100);
   };
+
+  const handleShare = async () => {
+      if (!kartuRef.current) return;
+      setSharing(true);
+      setShareError(null);
+      try {
+          await shareElementAsImage(
+              kartuRef.current,
+              safeFileName('Kartu-Iuran', warga.namaKepalaKeluarga, String(selectedYear)),
+              `Kartu pembayaran iuran ${selectedYear} - ${warga.namaKepalaKeluarga} (${warga.nomorRumah})`
+          );
+      } catch (err) {
+          setShareError(err instanceof Error ? err.message : 'Gagal membagikan kartu.');
+      } finally {
+          setSharing(false);
+      }
+  };
+
+  const buildThermalKartu = (paperWidth: 58 | 80) => buildKartu({
+      year: selectedYear,
+      residentName: warga.namaKepalaKeluarga,
+      residentBlock: warga.nomorRumah,
+      residentStatus: warga.status,
+      paidMonths,
+      incidental: incidentalTx.map(t => ({
+          date: new Date(t.date).toLocaleDateString("id-ID"),
+          name: categories.find(c => c.id === t.categoryId)?.name || t.description || 'Lainnya',
+          nominal: t.nominal,
+      })),
+      bendahara: settings['nama_bendahara'] || '(..........................)',
+  }, settings, paperWidth);
 
   const monthsList = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -124,6 +163,7 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
 
          {/* Printable Area */}
          <div className={`flex-1 ${isThermal ? 'print:overflow-visible p-6 sm:p-8 print:p-2' : 'overflow-y-auto print:overflow-visible p-8 sm:p-10 print:p-12'} text-gray-900 bg-white`}>
+            <div ref={kartuRef} className="bg-white">
             
             {/* Kop Surat */}
             <div className={`flex items-center justify-between border-b-2 border-gray-800 ${isThermal ? 'pb-4 mb-6' : 'pb-6 mb-8'}`}>
@@ -239,18 +279,29 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
                   <p className="font-bold underline uppercase pt-2">{namaBendahara}</p>
                </div>
             </div>
+            </div>
 
          </div>
 
          {/* Web Footer Actions (No Print) */}
          <div className="p-4 border-t border-gray-100 bg-white print:hidden flex justify-end gap-3 rounded-b-2xl flex-wrap">
+             {shareError && <p className="w-full text-xs font-semibold text-right text-red-600">{shareError}</p>}
              <button onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-gray-600 hover:bg-gray-100 transition-colors">Tutup</button>
+             <button onClick={handleShare} disabled={sharing} className="px-6 py-2.5 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 shadow-sm flex items-center gap-2 transition-transform active:scale-95">
+                 <Share2 className="w-4 h-4" /> {sharing ? 'Menyiapkan...' : 'Bagikan'}
+             </button>
+             {isNativeApp ? (
+               <div className="w-full sm:w-64">
+                 <BluetoothPrintButton build={buildThermalKartu} label="Cetak Thermal BT" />
+               </div>
+             ) : (<>
              <button onClick={handlePrintThermal} className="px-6 py-2.5 rounded-xl font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 shadow-sm flex items-center gap-2 transition-transform active:scale-95">
                  <Printer className="w-4 h-4" /> Cetak Thermal BT
              </button>
              <button onClick={handlePrintA4} className="px-6 py-2.5 rounded-xl font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-500/20 flex items-center gap-2 transition-transform active:scale-95">
                  <Printer className="w-4 h-4" /> Cetak A4 Standard
              </button>
+             </>)}
          </div>
 
       </div>
