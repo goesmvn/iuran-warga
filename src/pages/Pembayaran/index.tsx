@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
@@ -115,9 +115,14 @@ export default function Pembayaran() {
      });
   }, [selectedCategories, categories]);
 
-  const paidSet = useMemo(() => {
-    if (!residentId) return new Set<string>();
-    
+  // Status lunas dihitung per kategori, agar beberapa iuran bulanan bisa dibayar sekaligus tanpa saling
+  // memblokir (mis. Iuran Wajib Nov sudah lunas tapi Uang Keamanan Nov belum).
+  const { paidByCategory, tahunanPaidSet, anyPaidSet } = useMemo(() => {
+    const byCategory = new Map<string, Set<string>>();
+    const tahunan = new Set<string>();
+    const any = new Set<string>();
+    if (!residentId) return { paidByCategory: byCategory, tahunanPaidSet: tahunan, anyPaidSet: any };
+
     const bulananCids = categories.filter(c => c.name.toLowerCase().includes("bulanan") || c.periode === "Bulanan").map(c => c.id);
     const tahunanCids = categories.filter(c => c.name.toLowerCase().includes("tahunan") || c.periode === "Tahunan").map(c => c.id);
 
@@ -125,23 +130,40 @@ export default function Pembayaran() {
       (t) => t.type === "Pemasukan" && t.residentId === residentId
     );
 
-    const set = new Set<string>();
     paidTransactions.forEach(t => {
-        if (t.periodeTahun) {
-            // Bayar bulanan
-            if (t.periodeBulan && (bulananCids.includes(t.categoryId) || periodicCategories.includes(t.categoryId))) {
-                set.add(`${t.periodeTahun}-${t.periodeBulan}`);
-            }
-            // Jika bayar tahunan, otomatis cetang/anggap lunas 12 bulan
-            if (tahunanCids.includes(t.categoryId)) {
-                for (let i = 1; i <= 12; i++) {
-                    set.add(`${t.periodeTahun}-${i}`);
-                }
+        if (!t.periodeTahun) return;
+        // Bayar bulanan
+        if (t.periodeBulan && bulananCids.includes(t.categoryId)) {
+            const key = `${t.periodeTahun}-${t.periodeBulan}`;
+            if (!byCategory.has(t.categoryId)) byCategory.set(t.categoryId, new Set());
+            byCategory.get(t.categoryId)!.add(key);
+            any.add(key);
+        }
+        // Jika bayar tahunan, otomatis cetang/anggap lunas 12 bulan
+        if (tahunanCids.includes(t.categoryId)) {
+            for (let i = 1; i <= 12; i++) {
+                tahunan.add(`${t.periodeTahun}-${i}`);
+                any.add(`${t.periodeTahun}-${i}`);
             }
         }
     });
+    return { paidByCategory: byCategory, tahunanPaidSet: tahunan, anyPaidSet: any };
+  }, [residentId, categories, transactions]);
+
+  const isPaidFor = useCallback(
+    (cid: string, key: string) => tahunanPaidSet.has(key) || !!paidByCategory.get(cid)?.has(key),
+    [paidByCategory, tahunanPaidSet]
+  );
+
+  // Pilihan bulan: bulan dianggap lunas hanya jika SEMUA iuran bulanan yang dicentang sudah lunas di bulan tsb
+  const paidSet = useMemo(() => {
+    if (periodicCategories.length === 0) return anyPaidSet;
+    const set = new Set<string>();
+    anyPaidSet.forEach(key => {
+      if (periodicCategories.every(cid => isPaidFor(cid, key))) set.add(key);
+    });
     return set;
-  }, [residentId, categories, transactions, periodicCategories]);
+  }, [anyPaidSet, periodicCategories, isPaidFor]);
 
   const totalBulananNominal = useMemo(() => {
     return categories.filter(c => (c.periode === 'Bulanan' || c.name.toLowerCase().includes('bulanan')) && c.type === 'Pemasukan').reduce((acc, c) => acc + (c.defaultNominal || 0), 0);
@@ -161,7 +183,7 @@ export default function Pembayaran() {
     for (let y = currentYear; y >= startYear; y--) {
         let paidCount = 0;
         for (let i = 1; i <= 12; i++) {
-            if (paidSet.has(`${y}-${i}`)) paidCount++;
+            if (anyPaidSet.has(`${y}-${i}`)) paidCount++;
         }
         const unpaid = 12 - paidCount;
         if (unpaid > 0) {
@@ -173,7 +195,7 @@ export default function Pembayaran() {
     }
     
     return { arrearsList, totalNominal, totalUnpaid, isLunas: totalUnpaid === 0 };
-  }, [residentId, paidSet, startYear, currentYear, totalBulananNominal]);
+  }, [residentId, anyPaidSet, startYear, currentYear, totalBulananNominal]);
 
   const toggleCategory = (cid: string, defaultNominal: number = 0) => {
       setSelectedCategories(prev => {
@@ -235,6 +257,10 @@ export default function Pembayaran() {
       }
   }, [paymentYear, selectedCategories, paidSet, categories]);
 
+  // Bulan terpilih yang belum lunas untuk kategori tertentu (bulan yang sudah lunas dilewati, tidak ditagih dobel)
+  const monthsToPayFor = (cid: string) =>
+    selectedMonths.filter(sm => !isPaidFor(cid, `${sm.tahun}-${sm.bulan}`));
+
   let grandTotal = 0;
   const summaryDetails: { title: string; subTotal: number; id: string }[] = [];
 
@@ -248,13 +274,14 @@ export default function Pembayaran() {
           summaryDetails.push({ id: cid, title: `${cat?.name} (Lunas Setahun)`, subTotal: nom });
           grandTotal += nom;
       } else if (isPeriodic) {
-          const count = selectedMonths.length;
+          const count = monthsToPayFor(cid).length;
           const subTotal = nom * count;
           if (count > 0) {
               summaryDetails.push({ id: cid, title: `${cat?.name} (${count} bulan)`, subTotal });
               grandTotal += subTotal;
           } else {
-              summaryDetails.push({ id: cid, title: `${cat?.name} (Harap pilih bulan)`, subTotal: 0 });
+              const reason = selectedMonths.length > 0 ? "Bulan terpilih sudah lunas" : "Harap pilih bulan";
+              summaryDetails.push({ id: cid, title: `${cat?.name} (${reason})`, subTotal: 0 });
           }
       } else {
           summaryDetails.push({ id: cid, title: cat?.name || 'Lainnya', subTotal: nom });
@@ -281,6 +308,20 @@ export default function Pembayaran() {
       return;
     }
 
+    // Validasi semua kategori DULU, agar tidak ada yang tersimpan sebagian
+    const tahunanSelected = catIds.some(cid => {
+      const cat = categories.find(c => c.id === cid);
+      return cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
+    });
+    if (tahunanSelected && Array.from({ length: 12 }, (_, i) => i + 1).some(m => anyPaidSet.has(`${paymentYear}-${m}`))) {
+      // Jika ada bulan di tahun ini yang sudah lunas, iuran tahunan tidak bisa disubmit (karena akan double)
+      customAlert("Gagal", `Beberapa bulan pada Tahun ${paymentYear} sudah memiliki transaksi pembayaran. Batalkan transaksi lama terlebih dahulu.`, "error");
+      return;
+    }
+    // Simpan daftar bulan per kategori sebelum state transaksi berubah (dipakai juga untuk kwitansi)
+    const monthsByCategory: Record<string, { bulan: number; tahun: number }[]> = {};
+    periodicCategories.forEach(cid => { monthsByCategory[cid] = monthsToPayFor(cid); });
+
     const refId = "TRX-" + Date.now().toString().slice(-6);
 
     const txPromises: Promise<any>[] = [];
@@ -294,14 +335,6 @@ export default function Pembayaran() {
        if (nom <= 0) return;
 
        if (isTahunan) {
-            // Cek apakah tahun terpilih sudah lunas/terisi
-            // Jika ada bulan di tahun ini yang sudah lunas, iuran tahunan tidak bisa disubmit (karena akan double)
-            const hasAnyPaidInYear = Array.from({ length: 12 }, (_, i) => i + 1).some(m => paidSet.has(`${paymentYear}-${m}`));
-            if (hasAnyPaidInYear) {
-              customAlert("Gagal", `Beberapa bulan pada Tahun ${paymentYear} sudah memiliki transaksi pembayaran. Batalkan transaksi lama terlebih dahulu.`, "error");
-              return;
-            }
-
             const payload: Omit<Transaction, "id"> = {
               date: new Date(date).toISOString(),
               categoryId: cid,
@@ -314,15 +347,8 @@ export default function Pembayaran() {
             };
             txPromises.push(addTransaction(payload));
        } else if (isPeriodic && selectedMonths.length > 0) {
-          // Cek double input untuk iuran bulanan
-          const alreadyPaidMonths = selectedMonths.filter(sm => paidSet.has(`${sm.tahun}-${sm.bulan}`));
-          if (alreadyPaidMonths.length > 0) {
-             const paidStr = alreadyPaidMonths.map(sm => `${sm.bulan}/${sm.tahun}`).join(", ");
-             customAlert("Duplikasi Pembayaran", `Bulan berikut sudah dibayar sebelumnya: ${paidStr}. Mohon hapus centang bulan tersebut sebelum menyimpan.`, "warning");
-             return;
-          }
-
-          selectedMonths.forEach((sm) => {
+          // Hanya bulan yang belum lunas untuk kategori ini (cegah double input)
+          (monthsByCategory[cid] || []).forEach((sm) => {
             const payload: Omit<Transaction, "id"> = {
               date: new Date(date).toISOString(),
               categoryId: cid,
@@ -371,8 +397,8 @@ export default function Pembayaran() {
         const cat = categories.find(c => c.id === item.id);
         const isTahunan = cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
         const isPeriodic = periodicCategories.includes(item.id) && !isTahunan;
-        if (isPeriodic && selectedMonths.length > 0) {
-          const monthsStr = selectedMonths
+        if (isPeriodic && monthsByCategory[item.id]?.length) {
+          const monthsStr = monthsByCategory[item.id]
             .map(sm => `${new Date(2000, sm.bulan - 1).toLocaleString("id-ID", { month: "short" })} ${sm.tahun}`)
             .join(", ");
           return { ...item, title: `${item.title} [${monthsStr}]` };
