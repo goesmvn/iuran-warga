@@ -1,3 +1,4 @@
+import { todayLocal } from "../../utils/date";
 import { useState, useRef, useMemo } from "react";
 import { useWarga } from "../../hooks/useWarga";
 import { Plus, Trash2, Edit2, Upload, Download, Users, Printer, Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -22,7 +23,7 @@ export default function Warga() {
   const [roleWarga, setRoleWarga] = useState("Warga");
   const [status, setStatus] = useState<"Aktif" | "Pindah">("Aktif");
   const [tanggalMasuk, setTanggalMasuk] = useState(
-    new Date().toISOString().split("T")[0],
+    todayLocal(),
   );
 
   // Search & Pagination Logic
@@ -58,7 +59,7 @@ export default function Warga() {
     setNoHp("");
     setRoleWarga("Warga");
     setStatus("Aktif");
-    setTanggalMasuk(new Date().toISOString().split("T")[0]);
+    setTanggalMasuk(todayLocal());
     setIsModalOpen(true);
   };
 

@@ -1,3 +1,4 @@
+import { todayLocal } from "../../utils/date";
 import { useState, useMemo, useCallback } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
@@ -26,7 +27,7 @@ export default function Pembayaran() {
   const { locations } = useKasLocation();
   const { alert: customAlert } = useConfirm();
 
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayLocal());
 
   // Form State Warga Baru Modal
   const [isWargaModalOpen, setIsWargaModalOpen] = useState(false);
@@ -34,7 +35,7 @@ export default function Pembayaran() {
   const [newNomorRumah, setNewNomorRumah] = useState("");
   const [newNoHp, setNewNoHp] = useState("");
   const [newStatus, setNewStatus] = useState<"Aktif" | "Pindah">("Aktif");
-  const [newTanggalMasuk, setNewTanggalMasuk] = useState(new Date().toISOString().split("T")[0]);
+  const [newTanggalMasuk, setNewTanggalMasuk] = useState(todayLocal());
 
   const handleAddWargaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +64,7 @@ export default function Pembayaran() {
       setNewNomorRumah("");
       setNewNoHp("");
       setNewStatus("Aktif");
-      setNewTanggalMasuk(new Date().toISOString().split("T")[0]);
+      setNewTanggalMasuk(todayLocal());
       setSearchWarga("");
       customAlert("Sukses", "Warga baru berhasil ditambahkan.", "success");
     } catch (err) {

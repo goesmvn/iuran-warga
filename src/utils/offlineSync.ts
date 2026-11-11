@@ -48,6 +48,9 @@ type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 let rawFetch: FetchFn | null = null;
 let flushing: Promise<void> | null = null;
 let authExpired = false;
+// navigator.onLine hanya tahu ada/tidaknya jaringan, bukan apakah server terjangkau
+// (mis. WiFi tanpa internet). Ini diperbarui dari hasil request sungguhan.
+let serverReachable = true;
 const listeners = new Set<(s: SyncStatus) => void>();
 
 // ---------- storage helpers ----------
@@ -77,7 +80,7 @@ export const writeCache = (url: string, data: unknown) => writeJSON(CACHE_PREFIX
 // ---------- status ----------
 export function getSyncStatus(): SyncStatus {
   return {
-    online: navigator.onLine,
+    online: navigator.onLine && serverReachable,
     syncing: flushing !== null,
     pending: getQueue().length,
     failed: getFailed(),
@@ -88,6 +91,25 @@ export function getSyncStatus(): SyncStatus {
 function notify() {
   const status = getSyncStatus();
   listeners.forEach(l => l(status));
+}
+
+export const isServerReachable = () => serverReachable;
+
+let lastProbe = 0;
+/** Cek ringan apakah server bisa dihubungi lagi (maks. sekali per 10 detik), lalu kirim antrean. */
+export function probeServer() {
+  if (!rawFetch || !navigator.onLine || Date.now() - lastProbe < 10_000) return;
+  lastProbe = Date.now();
+  fetchWithTimeout(rawFetch, '/api/ping', {})
+    .then(() => flushQueue())
+    .catch(() => { /* masih tak terjangkau; status sudah ditandai oleh rawFetch */ });
+}
+
+/** Dipanggil setelah setiap request ke server: true jika ada respons, false jika gagal jaringan. */
+export function markReachable(reachable: boolean) {
+  if (serverReachable === reachable) return;
+  serverReachable = reachable;
+  notify();
 }
 
 export function subscribeSync(listener: (s: SyncStatus) => void) {
@@ -182,8 +204,10 @@ export function flushQueue(): Promise<void> {
       try {
         res = await fetchWithTimeout(send, item.url, { method: item.method, body: item.body });
       } catch {
+        markReachable(false);
         break; // masih offline / sinyal buruk, coba lagi nanti
       }
+      markReachable(true);
 
       if (res.ok) {
         authExpired = false;
@@ -216,11 +240,14 @@ export function flushQueue(): Promise<void> {
 /** Dipanggil sekali saat aplikasi mulai. */
 export function startAutoSync(fetchFn: FetchFn) {
   rawFetch = fetchFn;
-  window.addEventListener('online', () => { notify(); flushQueue(); });
+  window.addEventListener('online', () => { notify(); lastProbe = 0; probeServer(); flushQueue(); });
   window.addEventListener('offline', notify);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') flushQueue();
+    if (document.visibilityState === 'visible') { lastProbe = 0; probeServer(); flushQueue(); }
   });
-  setInterval(() => { if (getQueue().length > 0) flushQueue(); }, 30_000);
+  setInterval(() => {
+    if (!serverReachable) probeServer();
+    else if (getQueue().length > 0) flushQueue();
+  }, 30_000);
   flushQueue();
 }

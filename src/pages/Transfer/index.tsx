@@ -1,3 +1,4 @@
+import { todayLocal } from "../../utils/date";
 import { useState, useMemo } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useKasLocation, DEFAULT_KAS_LOCATION_ID } from "../../hooks/useKasLocation";
@@ -26,7 +27,7 @@ export default function Transfer() {
   const [fromKasId, setFromKasId] = useState("");
   const [toKasId, setToKasId] = useState("");
   const [nominal, setNominal] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayLocal());
   const [description, setDescription] = useState("");
 
   // Success feedback
@@ -100,7 +101,7 @@ export default function Transfer() {
     setFromKasId("");
     setToKasId("");
     setNominal("");
-    setDate(new Date().toISOString().split("T")[0]);
+    setDate(todayLocal());
     setDescription("");
     setIsModalOpen(true);
   };

@@ -1,3 +1,4 @@
+import { todayLocal } from "../../utils/date";
 import { useState, useMemo } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
@@ -40,11 +41,11 @@ export default function Laporan() {
   const [filterYearTahunan, setFilterYearTahunan] = useState(new Date().getFullYear());
   const [filterStartDate, setFilterStartDate] = useState(() => {
     // Default to today
-    return new Date().toISOString().split("T")[0];
+    return todayLocal();
   });
   const [filterEndDate, setFilterEndDate] = useState(() => {
     // Default to today
-    return new Date().toISOString().split("T")[0];
+    return todayLocal();
   });
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -54,7 +55,7 @@ export default function Laporan() {
   const [corrModalTab, setCorrModalTab] = useState<'quick_riwayat' | 'form'>('quick_riwayat');
   
   // Correction Form States
-  const [corrDate, setCorrDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [corrDate, setCorrDate] = useState(() => todayLocal());
   const [corrMonth, setCorrMonth] = useState(1);
   const [corrCategoryId, setCorrCategoryId] = useState("");
   const [corrNominal, setCorrNominal] = useState("");
@@ -257,7 +258,7 @@ export default function Laporan() {
     setCorrModalTab('quick_riwayat');
     
     // Set defaults
-    setCorrDate(new Date().toISOString().split("T")[0]);
+    setCorrDate(todayLocal());
     setCorrMonth(1);
     const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
     setCorrCategoryId(defaultCat?.id || "");
@@ -270,7 +271,7 @@ export default function Laporan() {
   const resetCorrForm = () => {
     setEditingTx(null);
     setCorrModalTab('quick_riwayat');
-    setCorrDate(new Date().toISOString().split("T")[0]);
+    setCorrDate(todayLocal());
     setCorrMonth(1);
     const defaultCat = categories.find(c => c.type === 'Pemasukan' && c.id !== 'cat-saldo-awal' && c.id !== 'cat-transfer');
     setCorrCategoryId(defaultCat?.id || "");

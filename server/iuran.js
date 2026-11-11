@@ -42,3 +42,9 @@ export function normalizePhone(raw) {
   else if (digits.startsWith('8')) digits = '62' + digits;
   return digits;
 }
+
+// Tanggal hari ini (YYYY-MM-DD) menurut zona waktu server (env TZ), bukan UTC
+export function todayLocal(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}

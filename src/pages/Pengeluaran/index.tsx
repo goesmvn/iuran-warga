@@ -1,3 +1,4 @@
+import { todayLocal } from "../../utils/date";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTransaksi } from "../../hooks/useTransaksi";
@@ -18,7 +19,7 @@ export default function Pengeluaran() {
   const [toastMessage, setToastMessage] = useState("");
 
   // Form States
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayLocal());
   const [categoryId, setCategoryId] = useState("");
   const [kasLocationId, setKasLocationId] = useState(DEFAULT_KAS_LOCATION_ID);
   const [nominal, setNominal] = useState("");

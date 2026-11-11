@@ -114,7 +114,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
             <div className="mb-4 space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-gray-500 whitespace-nowrap">Tanggal</span>
-                <span className="font-semibold text-right">{new Date(data.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="font-semibold text-right">{new Date(data.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: '2-digit' })}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500 whitespace-nowrap">No. Ref</span>

@@ -1,3 +1,4 @@
+import { todayLocal } from "../../utils/date";
 import { useState, useMemo, useRef } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
@@ -68,7 +69,7 @@ export default function Kas() {
   // States untuk Koreksi Saldo
   const [koreksiLocationId, setKoreksiLocationId] = useState('');
   const [koreksiSaldoFisik, setKoreksiSaldoFisik] = useState('');
-  const [koreksiDate, setKoreksiDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [koreksiDate, setKoreksiDate] = useState(() => todayLocal());
   const [koreksiDescription, setKoreksiDescription] = useState('Penyesuaian saldo fisik');
   
   const startYear = settings?.start_year || new Date().getFullYear().toString();
@@ -124,7 +125,7 @@ export default function Kas() {
   };
 
   // Form State
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayLocal());
   const [kasLocationId, setKasLocationId] = useState(DEFAULT_KAS_LOCATION_ID);
   const [nominal, setNominal] = useState("");
   const [description, setDescription] = useState("");
@@ -203,7 +204,7 @@ export default function Kas() {
   const openModalKoreksi = () => {
     setKoreksiLocationId(locations[0]?.id || 'loc-default');
     setKoreksiSaldoFisik('');
-    setKoreksiDate(new Date().toISOString().split("T")[0]);
+    setKoreksiDate(todayLocal());
     setKoreksiDescription('Koreksi selisih saldo fisik');
     setIsModalKoreksiOpen(true);
   };

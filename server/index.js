@@ -12,7 +12,7 @@ import { startBackupScheduler, runAutoBackup } from './backup.js';
 
 import { connectToWhatsApp, getStatus, logout, sendMessage } from './whatsapp/index.js';
 import { createPayment, checkTransaction } from './ipaymu.js';
-import { getUnpaidMonths, normalizePhone } from './iuran.js';
+import { getUnpaidMonths, normalizePhone, todayLocal } from './iuran.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -560,7 +560,7 @@ export async function executeBroadcast(templateStr) {
              INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, status, referenceId)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            `);
-           const txDate = new Date().toISOString().split('T')[0];
+           const txDate = todayLocal();
            db.transaction(() => {
              for (const u of unpaidMonths) {
                insertPending.run(
@@ -669,7 +669,7 @@ app.post('/api/broadcast/test', requireAdmin, async (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        `).run(
          `tx-test-${Date.now()}`,
-         new Date().toISOString().split('T')[0],
+         todayLocal(),
          'cat-1',
          'Pemasukan',
          totalDue,

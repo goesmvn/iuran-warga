@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import {
   applyToCache, enqueue, fetchWithTimeout, flushQueue, getSyncStatus,
-  isCacheable, isQueueable, readCache, startAutoSync, writeCache,
+  isCacheable, isQueueable, isServerReachable, markReachable, probeServer, readCache, startAutoSync, writeCache,
   type QueuedRequest,
 } from './offlineSync';
 
@@ -34,7 +34,10 @@ const authorizedFetch = (url: string, options: RequestInit = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  return fetch(apiUrl(url), { ...options, headers });
+  return fetch(apiUrl(url), { ...options, headers }).then(
+    (res) => { markReachable(true); return res; },
+    (err) => { markReachable(false); throw err; },
+  );
 };
 
 startAutoSync(authorizedFetch);
@@ -56,6 +59,12 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
 
   // Baca data: server dulu, cache jika offline
   if (method === 'GET' && isCacheable(url)) {
+    // Server diketahui tak terjangkau: tampilkan data di HP seketika, coba sync di latar belakang
+    const cachedNow = readCache(url);
+    if ((!navigator.onLine || !isServerReachable()) && cachedNow !== null) {
+      probeServer();
+      return jsonResponse(cachedNow);
+    }
     // Kirim antrean dulu agar data dari server sudah memuat catatan offline
     await flushQueue();
     try {
@@ -81,9 +90,16 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
     const body = typeof options.body === 'string' ? options.body : undefined;
     const queueMethod = method as QueuedRequest['method'];
 
+    // Server diketahui tak terjangkau: langsung antre tanpa menunggu timeout
+    if (!navigator.onLine || !isServerReachable()) {
+      enqueue(queueMethod, url, body);
+      probeServer();
+      return jsonResponse({ success: true, queued: true }, 202);
+    }
+
     // Jaga urutan: jika masih ada antrean, coba kirim dulu; kalau tetap tersisa, ikut antre
     await flushQueue();
-    if (!navigator.onLine || getSyncStatus().pending > 0) {
+    if (getSyncStatus().pending > 0) {
       enqueue(queueMethod, url, body);
       return jsonResponse({ success: true, queued: true }, 202);
     }
