@@ -25,7 +25,6 @@ services:
 
     ports:
       - "3088:3088"
-      - "5173:5173"
 
     volumes:
       # Volume persisten untuk database SQLite

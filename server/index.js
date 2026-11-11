@@ -685,25 +685,31 @@ app.post('/api/ipaymu/callback', async (req, res) => {
 
     // [SEC] JANGAN PERCAYA PAYLOAD BEGITU SAJA!
     // Lakukan verifikasi balik (GET) ke iPaymu menggunakan trx_id.
-    let validData;
-    try {
-      validData = await checkTransaction(trx_id);
-    } catch (e) {
-      // Jika error check (misal: trx_id ngarang saat test lokal), kita bypass KHUSUS UNTUK TESTING DUMMY jika berawalan TEST-TX
-      if (reference_id.startsWith('TEST-TX-') && trx_id === 'DUMMY_TRX_123') {
-        validData = { Status: 2, StatusDesc: 'berhasil', Total: 30000 };
-      } else {
-        throw e;
-      }
+    const validData = await checkTransaction(trx_id);
+
+    // [SEC] Pastikan trx_id yang diverifikasi memang milik reference_id ini.
+    // Tanpa cek ini, trx_id sah milik transaksi lain bisa dipakai untuk melunasi tagihan siapa pun.
+    if (String(validData.ReferenceId) !== String(reference_id)) {
+      console.warn(`[Webhook] ReferenceId mismatch: trx ${trx_id} milik ${validData.ReferenceId}, bukan ${reference_id}`);
+      return res.status(400).send('Bad Request');
     }
+
+    const tx = db.prepare('SELECT id, status, residentId, nominal FROM transactions WHERE referenceId = ?').get(reference_id);
+    if (!tx) return res.status(404).send('Not Found');
+
+    const statusDesc = String(validData.StatusDesc || '').toLowerCase();
+    const paidAmount = Number(validData.Amount ?? validData.Total);
 
     // Status 1 = Pending, 2 = Sukses/Berhasil, 3 = Gagal, 6 = Escrow (Dana tertahan sementara, biasanya dianggap sukses di sisi buyer)
     // Sesuai dokumentasi iPaymu v2, "escrow" berarti buyer sudah bayar tapi dana masuk ke rekening penampungan iPaymu sementara. Kita anggap ini LUNAS untuk warga.
-    if (validData.Status === 2 || validData.Status === 6 || validData.StatusDesc.toLowerCase() === 'berhasil' || validData.StatusDesc.toLowerCase() === 'escrow') {
-      // Temukan transaksi pending di database kita
-      const tx = db.prepare('SELECT id, status, residentId FROM transactions WHERE referenceId = ?').get(reference_id);
-      
-      if (tx && tx.status === 'Pending') {
+    if (validData.Status === 2 || validData.Status === 6 || statusDesc === 'berhasil' || statusDesc === 'escrow') {
+      // [SEC] Nominal yang dibayar minimal harus sebesar tagihan
+      if (!(paidAmount >= tx.nominal)) {
+        console.warn(`[Webhook] Nominal kurang untuk ${reference_id}: dibayar ${paidAmount}, tagihan ${tx.nominal}`);
+        return res.status(400).send('Amount Mismatch');
+      }
+
+      if (tx.status === 'Pending') {
         // Tandai sebagai lunas (Success)
         db.prepare("UPDATE transactions SET status = 'Success' WHERE referenceId = ?").run(reference_id);
         
@@ -713,14 +719,14 @@ app.post('/api/ipaymu/callback', async (req, res) => {
           if (tx.residentId) {
             const w = db.prepare('SELECT phone, namaKepalaKeluarga FROM warga WHERE id = ?').get(tx.residentId);
             if (w && w.phone) {
-               const msg = `Terima kasih Bapak/Ibu ${w.namaKepalaKeluarga}, pembayaran iuran sebesar Rp ${validData.Total.toLocaleString('id-ID')} telah berhasil diverifikasi otomatis oleh sistem. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
+               const msg = `Terima kasih Bapak/Ibu ${w.namaKepalaKeluarga}, pembayaran iuran sebesar Rp ${paidAmount.toLocaleString('id-ID')} telah berhasil diverifikasi otomatis oleh sistem. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
                const jid = `${w.phone.replace(/^0/, '62').replace(/\D/g, '')}@s.whatsapp.net`;
                await sendMessage(jid, msg);
             }
           } else {
              // Simulasi notifikasi untuk Test Broadcast
              console.log(`[Testing] Sending real WA receipt to tester...`);
-             const msg = `Terima kasih Bapak/Ibu Tester, pembayaran iuran sebesar Rp ${validData.Total.toLocaleString('id-ID')} telah berhasil diverifikasi otomatis oleh sistem. (Ini adalah simulasi Webhook JepunKas) 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
+             const msg = `Terima kasih Bapak/Ibu Tester, pembayaran iuran sebesar Rp ${paidAmount.toLocaleString('id-ID')} telah berhasil diverifikasi otomatis oleh sistem. (Ini adalah simulasi Webhook JepunKas) 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
              const jid = `6285190321727@s.whatsapp.net`; // Hardcoded nomor tester
              await sendMessage(jid, msg);
           }
@@ -730,7 +736,7 @@ app.post('/api/ipaymu/callback', async (req, res) => {
 
         console.log(`[Webhook] Payment Success for ${reference_id}`);
         return res.status(200).send('OK');
-      } else if (tx && tx.status === 'Success') {
+      } else if (tx.status === 'Success') {
         // [EDGE-CASE] Transaksi sudah sukses (Mencegah double trigger / spam WhatsApp)
         console.log(`[Webhook] Ignored duplicate success trigger for ${reference_id}`);
         return res.status(200).send('Already Success');
@@ -939,6 +945,6 @@ app.use((err, req, res, _next) => {
 const host = process.env.HOST || '127.0.0.1';
 app.listen(port, host, () => {
   console.log(`JepunKas API running on ${host}:${port}`);
-  startBackupScheduler();
+  startBackupScheduler(executeBroadcast);
   connectToWhatsApp().catch(err => console.error('WhatsApp Init Error:', err));
 });

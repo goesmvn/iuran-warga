@@ -3,10 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import db from './db.js';
-import { executeBroadcast } from './index.js';
-
-// Auto-Broadcast Scheduler Variable
-let lastBroadcastRunStr = null;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -177,18 +173,19 @@ export async function runAutoBackup(force = false) {
 
 // Inisialisasi scheduler (setiap 1 jam)
 let autoBackupIntervalId = null;
-export function startBackupScheduler() {
+// broadcastFn diinject dari index.js agar tidak terjadi circular import (backup.js <-> index.js)
+export function startBackupScheduler(broadcastFn) {
   if (autoBackupIntervalId) clearInterval(autoBackupIntervalId);
   // Jalankan auto-backup scheduler setiap jam
   autoBackupIntervalId = setInterval(() => {
     runAutoBackup(false);
-    runAutoBroadcast(); // Cek juga jadwal auto-broadcast
+    if (broadcastFn) runAutoBroadcast(broadcastFn); // Cek juga jadwal auto-broadcast
   }, 60 * 60 * 1000);
   
   // Trigger backup pertama kali saat server start
   setTimeout(() => {
     runAutoBackup(false);
-    runAutoBroadcast(); // Cek juga saat start
+    if (broadcastFn) runAutoBroadcast(broadcastFn); // Cek juga saat start
   }, 5000);
 }
 
@@ -196,7 +193,7 @@ export function startBackupScheduler() {
  * Menjalankan broadcast tagihan secara otomatis jika tanggal sistem sesuai dengan 'auto_broadcast_date'
  * (Ini fungsi minimalis tanpa iPaymu langsung untuk sementara, atau bisa panggil endpoint broadcast internal)
  */
-export async function runAutoBroadcast() {
+export async function runAutoBroadcast(executeBroadcast) {
   try {
     const settings = {};
     const rows = db.prepare('SELECT * FROM settings').all();
@@ -210,7 +207,12 @@ export async function runAutoBroadcast() {
     const currentMonthYear = `${today.getFullYear()}-${today.getMonth() + 1}`; // "2026-8"
 
     // Cek apakah hari ini adalah tanggal yg dijadwalkan, dan belum dijalankan bulan ini
-    if (currentDate === autoDate && lastBroadcastRunStr !== currentMonthYear) {
+    // Disimpan di DB (bukan variabel memori) agar restart server tidak memicu broadcast ganda
+    const lastRun = settings['last_auto_broadcast'];
+    if (currentDate === autoDate && lastRun !== currentMonthYear) {
+      // Tandai di awal agar tidak dobel walau eksekusi gagal/server restart di tengah jalan
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('last_auto_broadcast', currentMonthYear);
+
       console.log(`[Auto Broadcast] Tanggal ${autoDate} terdeteksi. Memulai auto-broadcast...`);
       
       try {
@@ -219,9 +221,6 @@ export async function runAutoBroadcast() {
       } catch (e) {
         console.error('[Auto Broadcast Logic Execution Failed]', e.message);
       }
-
-      // Tandai sudah dijalankan di bulan ini
-      lastBroadcastRunStr = currentMonthYear;
     }
   } catch (error) {
     console.error('[Auto Broadcast Logic Error]', error.message);
