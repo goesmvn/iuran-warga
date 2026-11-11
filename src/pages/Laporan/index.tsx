@@ -203,7 +203,7 @@ export default function Laporan() {
       })
       .map(w => {
         const wTx = transactions.filter(t => t.residentId === w.id && t.type === "Pemasukan" && t.periodeTahun === filterYear && (!t.status || t.status === 'Success'));
-        const paidMonthsMap = new Map<number, { date: string; nominal: number; categoryName: string }>();
+        const paidMonthsMap = new Map<number, { date: string; nominal: number; categoryName: string; rapelan?: boolean }>();
         wTx.forEach(t => {
           const categoryName = categories.find(c => c.id === t.categoryId)?.name || "Iuran";
           if (t.periodeBulan && bulananCids.includes(t.categoryId)) {
@@ -217,8 +217,9 @@ export default function Laporan() {
             for (let i = 1; i <= 12; i++) {
               paidMonthsMap.set(i, {
                 date: t.date,
-                nominal: t.nominal,
-                categoryName
+                nominal: t.nominal, // nominal rapelan untuk SATU TAHUN, bukan per bulan
+                categoryName,
+                rapelan: true
               });
             }
           }
@@ -1410,7 +1411,7 @@ export default function Laporan() {
                         const isZeroNominal = isHadir && txInfo.nominal === 0;
                         const formattedDate = isHadir ? new Date(txInfo.date).toLocaleDateString("id-ID", { day: 'numeric', month: 'short', year: 'numeric' }) : "";
                         const tooltipText = isHadir 
-                          ? `Lunas: ${formattedDate}\nNominal: Rp ${txInfo.nominal.toLocaleString("id-ID")}${isZeroNominal ? ' (Tanpa Kas)' : ''}\nKategori: ${txInfo.categoryName}` 
+                          ? `Lunas: ${formattedDate}\nNominal: Rp ${txInfo.nominal.toLocaleString("id-ID")}${txInfo.rapelan ? ' (rapelan 1 tahun)' : ''}${isZeroNominal ? ' (Tanpa Kas)' : ''}\nKategori: ${txInfo.categoryName}` 
                           : "Belum Bayar";
                         
                         return (
