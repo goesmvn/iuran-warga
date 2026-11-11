@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothSocket;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.util.Base64;
 
@@ -131,7 +132,7 @@ public class BluetoothPrinterPlugin extends Plugin {
             BluetoothSocket socket = null;
             try {
                 BluetoothDevice device = adapter.getRemoteDevice(address);
-                adapter.cancelDiscovery();
+                stopDiscoveryIfAllowed(adapter);
                 try {
                     socket = device.createRfcommSocketToServiceRecord(SPP_UUID);
                     socket.connect();
@@ -154,6 +155,23 @@ public class BluetoothPrinterPlugin extends Plugin {
                 closeQuietly(socket);
             }
         }).start();
+    }
+
+    /**
+     * Pencarian perangkat yang sedang berjalan memperlambat koneksi, jadi dihentikan bila boleh.
+     * Di Android 12+ cancelDiscovery() butuh izin BLUETOOTH_SCAN yang tidak diminta aplikasi ini
+     * (aplikasi tidak pernah memindai); tanpa pengecekan ini SEMUA cetakan gagal dengan SecurityException.
+     */
+    @SuppressLint("MissingPermission")
+    private void stopDiscoveryIfAllowed(BluetoothAdapter adapter) {
+        boolean allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+            || getContext().checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED;
+        if (!allowed) return;
+        try {
+            adapter.cancelDiscovery();
+        } catch (SecurityException ignored) {
+            // tidak kritis untuk mencetak
+        }
     }
 
     private static void closeQuietly(BluetoothSocket socket) {
