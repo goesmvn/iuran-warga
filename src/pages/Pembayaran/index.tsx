@@ -379,6 +379,69 @@ export default function Pembayaran() {
     // Reset Form (handled on receipt modal close now to prevent UI flickering)
   };
 
+  const monthLabel = (m: number) => new Date(2000, m - 1).toLocaleString("id-ID", { month: "short" });
+
+  const renderPeriodPicker = (cid: string) => {
+    const isTahunan = tahunanCategories.includes(cid);
+    const year = yearOf(cid);
+    const yearSelect = (
+      <select value={year} onChange={(e) => setYearByCat(prev => ({ ...prev, [cid]: Number(e.target.value) }))} className="px-3 py-1.5 rounded-lg border border-orange-300 text-sm font-bold text-orange-900 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20">
+        {yearOptions.map((y) => <option key={y} value={y}>Tahun {y}</option>)}
+      </select>
+    );
+
+    if (isTahunan) {
+      return (
+        <div className="mt-2 pl-8 flex items-center gap-3 flex-wrap animate-in slide-in-from-top-2 duration-200">
+          {yearSelect}
+          <p className="text-xs text-orange-800">Melunasi seluruh iuran bulanan selama <b>Tahun {year}</b>.</p>
+        </div>
+      );
+    }
+
+    const months = Array.from({ length: 12 }, (_, i) => i + 1);
+    const locked = (m: number) => isPaidFor(cid, `${year}-${m}`) || tahunanYearsSelected.has(year);
+    const allLocked = months.every(locked);
+    const chosen = monthsToPayFor(cid);
+
+    return (
+      <div className="mt-2 pl-8 space-y-3 animate-in slide-in-from-top-2 duration-200">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-xs font-bold text-orange-800">Pilih bulan yang dibayar:</span>
+          {yearSelect}
+        </div>
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+          {months.map((m) => {
+            const isPaid = isPaidFor(cid, `${year}-${m}`);
+            const isCovered = !isPaid && tahunanYearsSelected.has(year);
+            const isSelected = !isPaid && !isCovered && (monthsByCat[cid] || []).some((s) => s.bulan === m && s.tahun === year);
+            return (
+              <button
+                  type="button" key={m} disabled={isPaid || isCovered} onClick={() => toggleMonthSelection(cid, m, year)}
+                  title={isPaid ? "Sudah lunas" : isCovered ? "Tercakup iuran tahunan" : undefined}
+                  className={`px-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${
+                    isPaid || isCovered ? "bg-green-100/30 text-green-700 border-green-100 cursor-not-allowed opacity-70" : isSelected ? "bg-[#f43f5e] text-white border-[#e11d48] shadow-md transform scale-105" : "bg-white text-orange-800 border-orange-200 hover:bg-orange-100 hover:border-orange-300 hover:-translate-y-0.5"
+                  }`}
+              >
+                  {isPaid || isCovered ? <Check className="w-4 h-4 text-green-500" /> : <span className="w-4 h-4" />}
+                  <span className="uppercase text-[11px] tracking-wider">{monthLabel(m)}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-orange-700">
+          {!residentId
+            ? "Pilih warga dulu agar bulan yang sudah lunas ditandai ✓."
+            : allLocked
+              ? `Semua bulan Tahun ${year} sudah lunas (✓). Ganti tahun untuk bayar di muka.`
+              : chosen.length > 0
+                ? `Dipilih: ${chosen.map(sm => `${monthLabel(sm.bulan)}${sm.tahun !== year ? ` ${sm.tahun}` : ""}`).join(", ")} (${chosen.length} bulan) · ✓ = sudah lunas`
+                : "Klik bulan yang mau dibayar · ✓ = sudah lunas"}
+        </p>
+      </div>
+    );
+  };
+
   const getResidentName = (id?: string) =>
     warga.find((w) => w.id === id)?.namaKepalaKeluarga || "-";
 
@@ -533,8 +596,9 @@ export default function Pembayaran() {
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {incomes.map(c => {
                        const isSelected = selectedCategories[c.id] !== undefined;
+                       const hasPeriodPicker = isSelected && (periodicCategories.includes(c.id) || tahunanCategories.includes(c.id));
                        return (
-                           <div key={c.id} className={`flex flex-col gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer ${isSelected ? 'border-[#f43f5e] bg-orange-50/50 shadow-sm' : 'border-gray-100 hover:border-orange-200 bg-white'}`}>
+                           <div key={c.id} className={`flex flex-col gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer ${hasPeriodPicker ? 'sm:col-span-2' : ''} ${isSelected ? 'border-[#f43f5e] bg-orange-50/50 shadow-sm' : 'border-gray-100 hover:border-orange-200 bg-white'}`}>
                               <div className="flex items-center gap-3" onClick={() => toggleCategory(c.id, c.defaultNominal || 0)}>
                                   <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-[#f43f5e] border-[#f43f5e] text-white' : 'border-gray-300 bg-white'}`}>
                                      {isSelected && <Check className="w-3.5 h-3.5" />}
@@ -558,66 +622,14 @@ export default function Pembayaran() {
                                       </div>
                                   </div>
                               )}
+                              {/* Periode langsung di bawah iuran yang dipilih */}
+                              {hasPeriodPicker && renderPeriodPicker(c.id)}
                            </div>
                        )
                     })}
                  </div>
               </div>
 
-              {/* Section 4: Periode per iuran (bulanan: pilih bulan, tahunan: pilih tahun) */}
-              {residentId && [...periodicCategories, ...tahunanCategories].map(cid => {
-                const cat = categories.find(c => c.id === cid);
-                const isTahunan = tahunanCategories.includes(cid);
-                const year = yearOf(cid);
-                const chosen = monthsToPayFor(cid).filter(sm => sm.tahun === year);
-
-                return (
-                  <div key={cid} className="bg-orange-50/50 border border-orange-200 rounded-xl p-5 relative overflow-hidden animate-in zoom-in-95 duration-300">
-                    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-                      <div className="flex items-center gap-2 text-orange-800 min-w-0">
-                        <CheckSquare className="w-5 h-5 flex-shrink-0" />
-                        <h4 className="font-bold truncate">{cat?.name}</h4>
-                        <span className="text-xs font-medium bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full">{isTahunan ? 'Tahunan' : 'Bulanan'}</span>
-                      </div>
-                      <select value={year} onChange={(e) => setYearByCat(prev => ({ ...prev, [cid]: Number(e.target.value) }))} className="px-3 py-1.5 rounded-lg border border-orange-300 font-bold text-orange-900 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20">
-                        {yearOptions.map((y) => <option key={y} value={y}>Tahun {y}</option>)}
-                      </select>
-                    </div>
-
-                    {isTahunan ? (
-                      <p className="text-sm text-orange-800">Melunasi seluruh iuran bulanan selama <b>Tahun {year}</b>.</p>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
-                            const isPaid = isPaidFor(cid, `${year}-${m}`);
-                            const isCovered = !isPaid && tahunanYearsSelected.has(year);
-                            const isSelected = !isPaid && !isCovered && (monthsByCat[cid] || []).some((s) => s.bulan === m && s.tahun === year);
-
-                            return (
-                              <button
-                                  type="button" key={m} disabled={isPaid || isCovered} onClick={() => toggleMonthSelection(cid, m, year)}
-                                  title={isPaid ? "Sudah lunas" : isCovered ? "Tercakup iuran tahunan" : undefined}
-                                  className={`px-1 py-3 rounded-xl text-sm font-bold border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${
-                                    isPaid || isCovered ? "bg-green-100/30 text-green-700 border-green-100 cursor-not-allowed opacity-70" : isSelected ? "bg-[#f43f5e] text-white border-[#e11d48] shadow-md transform scale-105" : "bg-white text-orange-800 border-orange-200 hover:bg-orange-100 hover:border-orange-300 hover:-translate-y-0.5"
-                                  }`}
-                              >
-                                  {isPaid || isCovered ? <Check className="w-4 h-4 text-green-500" /> : <span className="w-4 h-4" />}
-                                  <span className="uppercase text-[11px] tracking-wider">{new Date(2000, m - 1).toLocaleString("id-ID", { month: "short" })}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <p className="text-xs text-orange-700 mt-3">
-                          {monthsToPayFor(cid).length > 0
-                            ? `${monthsToPayFor(cid).length} bulan dipilih${chosen.length !== monthsToPayFor(cid).length ? " (termasuk tahun lain)" : ""}`
-                            : "Belum ada bulan dipilih"}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
            </div>
         </div>
 
