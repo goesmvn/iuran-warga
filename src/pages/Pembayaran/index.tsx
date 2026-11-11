@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
@@ -74,10 +74,9 @@ export default function Pembayaran() {
 
   const [searchWarga, setSearchWarga] = useState("");
   const [residentId, setResidentId] = useState("");
-  const [selectedMonths, setSelectedMonths] = useState<
-    { bulan: number; tahun: number }[]
-  >([]);
-  const [paymentYear, setPaymentYear] = useState<number>(new Date().getFullYear());
+  // Pilihan periode per iuran: bulan untuk iuran bulanan, tahun untuk iuran tahunan
+  const [monthsByCat, setMonthsByCat] = useState<Record<string, { bulan: number; tahun: number }[]>>({});
+  const [yearByCat, setYearByCat] = useState<Record<string, number>>({});
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   
   const yearOptions = Array.from({length: 7}, (_, i) => new Date().getFullYear() - 2 + i);
@@ -106,10 +105,8 @@ export default function Pembayaran() {
      });
   }, [selectedCategories, categories]);
 
-  const hasPeriodic = periodicCategories.length > 0;
-
-  const hasTahunan = useMemo(() => {
-     return Object.keys(selectedCategories).some(cid => {
+  const tahunanCategories = useMemo(() => {
+     return Object.keys(selectedCategories).filter(cid => {
          const cat = categories.find(c => c.id === cid);
          return cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
      });
@@ -155,15 +152,6 @@ export default function Pembayaran() {
     [paidByCategory, tahunanPaidSet]
   );
 
-  // Pilihan bulan: bulan dianggap lunas hanya jika SEMUA iuran bulanan yang dicentang sudah lunas di bulan tsb
-  const paidSet = useMemo(() => {
-    if (periodicCategories.length === 0) return anyPaidSet;
-    const set = new Set<string>();
-    anyPaidSet.forEach(key => {
-      if (periodicCategories.every(cid => isPaidFor(cid, key))) set.add(key);
-    });
-    return set;
-  }, [anyPaidSet, periodicCategories, isPaidFor]);
 
   const totalBulananNominal = useMemo(() => {
     return categories.filter(c => (c.periode === 'Bulanan' || c.name.toLowerCase().includes('bulanan')) && c.type === 'Pemasukan').reduce((acc, c) => acc + (c.defaultNominal || 0), 0);
@@ -202,6 +190,7 @@ export default function Pembayaran() {
           const next = { ...prev };
           if (next[cid] !== undefined) {
               delete next[cid];
+              setMonthsByCat(m => { const rest = { ...m }; delete rest[cid]; return rest; });
           } else {
               next[cid] = defaultNominal;
           }
@@ -214,52 +203,27 @@ export default function Pembayaran() {
       setSelectedCategories(prev => ({ ...prev, [cid]: isNaN(numericValue) ? 0 : numericValue }));
   };
 
-  const toggleMonthSelection = (m: number, y: number) => {
-    setSelectedMonths((prev) => {
-      const exists = prev.find((p) => p.bulan === m && p.tahun === y);
-      if (exists) return prev.filter((p) => !(p.bulan === m && p.tahun === y));
-      return [...prev, { bulan: m, tahun: y }];
+  const yearOf = (cid: string) => yearByCat[cid] ?? currentYear;
+
+  // Tahun yang sedang dibayar lunas lewat iuran tahunan di transaksi ini (bulan di tahun tsb sudah tercakup)
+  const tahunanYearsSelected = new Set(tahunanCategories.map(yearOf));
+
+  const toggleMonthSelection = (cid: string, m: number, y: number) => {
+    setMonthsByCat((prev) => {
+      const current = prev[cid] || [];
+      const exists = current.some((p) => p.bulan === m && p.tahun === y);
+      return {
+        ...prev,
+        [cid]: exists ? current.filter((p) => !(p.bulan === m && p.tahun === y)) : [...current, { bulan: m, tahun: y }],
+      };
     });
   };
 
-  // Auto-check 12 months if Tahunan is selected
-  useEffect(() => {
-      const selectedTahunanCids = Object.keys(selectedCategories).filter(cid => {
-          const cat = categories.find(c => c.id === cid);
-          return cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
-      });
-      
-      if (selectedTahunanCids.length > 0) {
-          setSelectedMonths(prev => {
-              // Hapus bulan-bulan lain yang di tahun ini (biar digantikan full)
-              const otherYears = prev.filter(s => s.tahun !== paymentYear);
-              const newSet = [...otherYears];
-              
-              // Masukkan ke-12 bulan untuk tahun terpilih (kecuali yang sudah lunas sebelumnya di database)
-              for (let i = 1; i <= 12; i++) {
-                  if (!paidSet.has(`${paymentYear}-${i}`)) {
-                      newSet.push({ bulan: i, tahun: paymentYear });
-                  }
-              }
-              return newSet;
-          });
-      } else {
-          // If no tahunan is selected, clear only the auto-checked 12 months that were selected for Tahunan
-          // but do not blindly clear the selected months if user is just switching options,
-          // only reset if no periodic iuran is selected.
-          const hasPeriodicSelected = Object.keys(selectedCategories).some(cid => {
-              const cat = categories.find(c => c.id === cid);
-              return cat?.name.toLowerCase().includes("bulanan") || cat?.periode === "Bulanan";
-          });
-          if (!hasPeriodicSelected) {
-              setSelectedMonths([]);
-          }
-      }
-  }, [paymentYear, selectedCategories, paidSet, categories]);
-
   // Bulan terpilih yang belum lunas untuk kategori tertentu (bulan yang sudah lunas dilewati, tidak ditagih dobel)
   const monthsToPayFor = (cid: string) =>
-    selectedMonths.filter(sm => !isPaidFor(cid, `${sm.tahun}-${sm.bulan}`));
+    (monthsByCat[cid] || [])
+      .filter(sm => !isPaidFor(cid, `${sm.tahun}-${sm.bulan}`) && !tahunanYearsSelected.has(sm.tahun))
+      .sort((a, b) => a.tahun - b.tahun || a.bulan - b.bulan);
 
   let grandTotal = 0;
   const summaryDetails: { title: string; subTotal: number; id: string }[] = [];
@@ -271,7 +235,7 @@ export default function Pembayaran() {
       const nom = selectedCategories[cid] || 0;
 
       if (isTahunan) {
-          summaryDetails.push({ id: cid, title: `${cat?.name} (Lunas Setahun)`, subTotal: nom });
+          summaryDetails.push({ id: cid, title: `${cat?.name} (Lunas Tahun ${yearOf(cid)})`, subTotal: nom });
           grandTotal += nom;
       } else if (isPeriodic) {
           const count = monthsToPayFor(cid).length;
@@ -280,8 +244,7 @@ export default function Pembayaran() {
               summaryDetails.push({ id: cid, title: `${cat?.name} (${count} bulan)`, subTotal });
               grandTotal += subTotal;
           } else {
-              const reason = selectedMonths.length > 0 ? "Bulan terpilih sudah lunas" : "Harap pilih bulan";
-              summaryDetails.push({ id: cid, title: `${cat?.name} (${reason})`, subTotal: 0 });
+              summaryDetails.push({ id: cid, title: `${cat?.name} (Harap pilih bulan)`, subTotal: 0 });
           }
       } else {
           summaryDetails.push({ id: cid, title: cat?.name || 'Lainnya', subTotal: nom });
@@ -298,8 +261,10 @@ export default function Pembayaran() {
       return;
     }
 
-    if ((hasPeriodic || hasTahunan) && selectedMonths.length === 0) {
-      customAlert("Pilih Bulan", "Pilih minimal 1 bulan pada tahun yang dituju untuk iuran.", "warning");
+    const withoutMonths = periodicCategories.filter(cid => monthsToPayFor(cid).length === 0);
+    if (withoutMonths.length > 0) {
+      const names = withoutMonths.map(cid => categories.find(c => c.id === cid)?.name).join(", ");
+      customAlert("Pilih Bulan", `Pilih minimal 1 bulan untuk: ${names}.`, "warning");
       return;
     }
     
@@ -309,14 +274,13 @@ export default function Pembayaran() {
     }
 
     // Validasi semua kategori DULU, agar tidak ada yang tersimpan sebagian
-    const tahunanSelected = catIds.some(cid => {
-      const cat = categories.find(c => c.id === cid);
-      return cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
-    });
-    if (tahunanSelected && Array.from({ length: 12 }, (_, i) => i + 1).some(m => anyPaidSet.has(`${paymentYear}-${m}`))) {
+    for (const cid of tahunanCategories) {
+      const y = yearOf(cid);
       // Jika ada bulan di tahun ini yang sudah lunas, iuran tahunan tidak bisa disubmit (karena akan double)
-      customAlert("Gagal", `Beberapa bulan pada Tahun ${paymentYear} sudah memiliki transaksi pembayaran. Batalkan transaksi lama terlebih dahulu.`, "error");
-      return;
+      if (Array.from({ length: 12 }, (_, i) => i + 1).some(m => anyPaidSet.has(`${y}-${m}`))) {
+        customAlert("Gagal", `Beberapa bulan pada Tahun ${y} sudah memiliki transaksi pembayaran. Batalkan transaksi lama terlebih dahulu.`, "error");
+        return;
+      }
     }
     // Simpan daftar bulan per kategori sebelum state transaksi berubah (dipakai juga untuk kwitansi)
     const monthsByCategory: Record<string, { bulan: number; tahun: number }[]> = {};
@@ -340,13 +304,13 @@ export default function Pembayaran() {
               categoryId: cid,
               type: "Pemasukan",
               nominal: Number(nom),
-              description: `Pembayaran ${cat?.name || 'Iuran Tahunan'} Tahun ${paymentYear}`,
+              description: `Pembayaran ${cat?.name || 'Iuran Tahunan'} Tahun ${yearOf(cid)}`,
               residentId,
-              periodeTahun: paymentYear,
+              periodeTahun: yearOf(cid),
               kasLocationId
             };
             txPromises.push(addTransaction(payload));
-       } else if (isPeriodic && selectedMonths.length > 0) {
+       } else if (isPeriodic) {
           // Hanya bulan yang belum lunas untuk kategori ini (cegah double input)
           (monthsByCategory[cid] || []).forEach((sm) => {
             const payload: Omit<Transaction, "id"> = {
@@ -404,7 +368,7 @@ export default function Pembayaran() {
           return { ...item, title: `${item.title} [${monthsStr}]` };
         }
         if (isTahunan) {
-          return { ...item, title: `${item.title} [Tahun ${paymentYear}]` };
+          return item;
         }
         return item;
       }),
@@ -600,39 +564,60 @@ export default function Pembayaran() {
                  </div>
               </div>
 
-              {/* Section 4: Pembayaran Bulanan (Tampil jika ada kategori bulanan atau tahunan) */}
-              {residentId && (hasPeriodic || hasTahunan) && (
-                <div className="bg-orange-50/50 border border-orange-200 rounded-xl p-5 relative overflow-hidden animate-in zoom-in-95 duration-300">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 text-orange-800">
-                      <CheckSquare className="w-5 h-5" />
-                      <h4 className="font-bold">Periode Bulan <span className="text-xs font-medium bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full ml-2">{hasTahunan ? 'Tahunan' : 'Wajib'}</span></h4>
+              {/* Section 4: Periode per iuran (bulanan: pilih bulan, tahunan: pilih tahun) */}
+              {residentId && [...periodicCategories, ...tahunanCategories].map(cid => {
+                const cat = categories.find(c => c.id === cid);
+                const isTahunan = tahunanCategories.includes(cid);
+                const year = yearOf(cid);
+                const chosen = monthsToPayFor(cid).filter(sm => sm.tahun === year);
+
+                return (
+                  <div key={cid} className="bg-orange-50/50 border border-orange-200 rounded-xl p-5 relative overflow-hidden animate-in zoom-in-95 duration-300">
+                    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                      <div className="flex items-center gap-2 text-orange-800 min-w-0">
+                        <CheckSquare className="w-5 h-5 flex-shrink-0" />
+                        <h4 className="font-bold truncate">{cat?.name}</h4>
+                        <span className="text-xs font-medium bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full">{isTahunan ? 'Tahunan' : 'Bulanan'}</span>
+                      </div>
+                      <select value={year} onChange={(e) => setYearByCat(prev => ({ ...prev, [cid]: Number(e.target.value) }))} className="px-3 py-1.5 rounded-lg border border-orange-300 font-bold text-orange-900 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20">
+                        {yearOptions.map((y) => <option key={y} value={y}>Tahun {y}</option>)}
+                      </select>
                     </div>
-                    <select value={paymentYear} onChange={(e) => setPaymentYear(Number(e.target.value))} className="px-3 py-1.5 rounded-lg border border-orange-300 font-bold text-orange-900 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20">
-                      {yearOptions.map((y) => <option key={y} value={y}>Tahun {y}</option>)}
-                    </select>
-                  </div>
 
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
-                      const isPaid = paidSet.has(`${paymentYear}-${m}`);
-                      const isSelected = selectedMonths.some((s) => s.bulan === m && s.tahun === paymentYear);
+                    {isTahunan ? (
+                      <p className="text-sm text-orange-800">Melunasi seluruh iuran bulanan selama <b>Tahun {year}</b>.</p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
+                            const isPaid = isPaidFor(cid, `${year}-${m}`);
+                            const isCovered = !isPaid && tahunanYearsSelected.has(year);
+                            const isSelected = !isPaid && !isCovered && (monthsByCat[cid] || []).some((s) => s.bulan === m && s.tahun === year);
 
-                      return (
-                        <button
-                            type="button" key={m} disabled={isPaid || hasTahunan} onClick={() => toggleMonthSelection(m, paymentYear)}
-                            className={`px-1 py-3 rounded-xl text-sm font-bold border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${
-                              isPaid ? "bg-green-100/30 text-green-700 border-green-100 cursor-not-allowed opacity-70" : isSelected ? "bg-[#f43f5e] text-white border-[#e11d48] shadow-md transform scale-105" : "bg-white text-orange-800 border-orange-200 hover:bg-orange-100 hover:border-orange-300 hover:-translate-y-0.5"
-                            }`}
-                        >
-                            {isPaid ? <Check className="w-4 h-4 text-green-500" /> : <span className="w-4 h-4" />} 
-                            <span className="uppercase text-[11px] tracking-wider">{new Date(2000, m - 1).toLocaleString("id-ID", { month: "short" })}</span>
-                        </button>
-                      );
-                    })}
+                            return (
+                              <button
+                                  type="button" key={m} disabled={isPaid || isCovered} onClick={() => toggleMonthSelection(cid, m, year)}
+                                  title={isPaid ? "Sudah lunas" : isCovered ? "Tercakup iuran tahunan" : undefined}
+                                  className={`px-1 py-3 rounded-xl text-sm font-bold border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${
+                                    isPaid || isCovered ? "bg-green-100/30 text-green-700 border-green-100 cursor-not-allowed opacity-70" : isSelected ? "bg-[#f43f5e] text-white border-[#e11d48] shadow-md transform scale-105" : "bg-white text-orange-800 border-orange-200 hover:bg-orange-100 hover:border-orange-300 hover:-translate-y-0.5"
+                                  }`}
+                              >
+                                  {isPaid || isCovered ? <Check className="w-4 h-4 text-green-500" /> : <span className="w-4 h-4" />}
+                                  <span className="uppercase text-[11px] tracking-wider">{new Date(2000, m - 1).toLocaleString("id-ID", { month: "short" })}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-orange-700 mt-3">
+                          {monthsToPayFor(cid).length > 0
+                            ? `${monthsToPayFor(cid).length} bulan dipilih${chosen.length !== monthsToPayFor(cid).length ? " (termasuk tahun lain)" : ""}`
+                            : "Belum ada bulan dipilih"}
+                        </p>
+                      </>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })}
            </div>
         </div>
 
@@ -662,7 +647,7 @@ export default function Pembayaran() {
                     </div>
                 </div>
 
-                <button type="submit" disabled={!residentId || Object.keys(selectedCategories).length === 0 || !kasLocationId || ((hasPeriodic || hasTahunan) && selectedMonths.length === 0)} className="w-full py-4 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] disabled:opacity-50 disabled:hover:bg-[#f43f5e] disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-[#f43f5e]/20 flex justify-center items-center gap-2 group">
+                <button type="submit" disabled={!residentId || Object.keys(selectedCategories).length === 0 || !kasLocationId || periodicCategories.some(cid => monthsToPayFor(cid).length === 0)} className="w-full py-4 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] disabled:opacity-50 disabled:hover:bg-[#f43f5e] disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-[#f43f5e]/20 flex justify-center items-center gap-2 group">
                    <CheckSquare className="w-5 h-5 group-disabled:opacity-50" />
                    Simpan & Cetak
                 </button>
@@ -681,7 +666,8 @@ export default function Pembayaran() {
           // Reset form state ONLY after modal is closed
           setSearchWarga("");
           setResidentId("");
-          setSelectedMonths([]);
+          setMonthsByCat({});
+          setYearByCat({});
           setSelectedCategories({});
         }} 
         data={receiptData} 
