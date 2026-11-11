@@ -37,8 +37,10 @@ export default function Transfer() {
   const kasBalances = useMemo(() => {
     const balanceMap: Record<string, number> = {};
     locations.forEach(loc => {
+      // Hanya uang yang benar-benar masuk/keluar (tagihan iPaymu Pending/Failed bukan saldo)
       const locTxs = transactions.filter(t =>
-        t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID)
+        (t.kasLocationId === loc.id || (!t.kasLocationId && loc.id === DEFAULT_KAS_LOCATION_ID)) &&
+        (!t.status || t.status === 'Success')
       );
       const masuk = locTxs.filter(t => t.type === "Pemasukan").reduce((s, t) => s + t.nominal, 0);
       const keluar = locTxs.filter(t => t.type === "Pengeluaran").reduce((s, t) => s + t.nominal, 0);

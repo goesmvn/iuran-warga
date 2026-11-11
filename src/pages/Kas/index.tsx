@@ -282,7 +282,7 @@ export default function Kas() {
   const runningBalanceMap = useMemo(() => {
     if (selectedKas === "Semua") return null;
     const chron = [...transactions]
-      .filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === selectedKas)
+      .filter(t => (t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID) === selectedKas && (!t.status || t.status === 'Success'))
       .sort((a, b) => a.date.localeCompare(b.date) || getCreatedAt(a) - getCreatedAt(b));
     const map = new Map<string, number>();
     let running = 0;

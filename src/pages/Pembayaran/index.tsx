@@ -1,5 +1,5 @@
 import { todayLocal } from "../../utils/date";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
@@ -15,10 +15,10 @@ import {
   CalendarDays,
   X
 } from "lucide-react";
-import type { Transaction } from "../../types";
 import { ReceiptModal, type ReceiptData } from "../../components/ReceiptModal";
 import { useConfirm } from "../../contexts/ConfirmContext";
 import { unpaidMonthsInYear } from "../../utils/iuran";
+import { buildPaidState, buildPaymentPlan, isPaidFor as isPaidForState, planItemTitle } from "../../utils/pembayaran";
 
 export default function Pembayaran() {
   const { transactions, addTransaction } = useTransaksi();
@@ -116,43 +116,9 @@ export default function Pembayaran() {
 
   // Status lunas dihitung per kategori, agar beberapa iuran bulanan bisa dibayar sekaligus tanpa saling
   // memblokir (mis. Iuran Wajib Nov sudah lunas tapi Uang Keamanan Nov belum).
-  const { paidByCategory, tahunanPaidSet, anyPaidSet } = useMemo(() => {
-    const byCategory = new Map<string, Set<string>>();
-    const tahunan = new Set<string>();
-    const any = new Set<string>();
-    if (!residentId) return { paidByCategory: byCategory, tahunanPaidSet: tahunan, anyPaidSet: any };
-
-    const bulananCids = categories.filter(c => c.name.toLowerCase().includes("bulanan") || c.periode === "Bulanan").map(c => c.id);
-    const tahunanCids = categories.filter(c => c.name.toLowerCase().includes("tahunan") || c.periode === "Tahunan").map(c => c.id);
-
-    const paidTransactions = transactions.filter(
-      (t) => t.type === "Pemasukan" && t.residentId === residentId && (!t.status || t.status === "Success")
-    );
-
-    paidTransactions.forEach(t => {
-        if (!t.periodeTahun) return;
-        // Bayar bulanan
-        if (t.periodeBulan && bulananCids.includes(t.categoryId)) {
-            const key = `${t.periodeTahun}-${t.periodeBulan}`;
-            if (!byCategory.has(t.categoryId)) byCategory.set(t.categoryId, new Set());
-            byCategory.get(t.categoryId)!.add(key);
-            any.add(key);
-        }
-        // Jika bayar tahunan, otomatis cetang/anggap lunas 12 bulan
-        if (tahunanCids.includes(t.categoryId)) {
-            for (let i = 1; i <= 12; i++) {
-                tahunan.add(`${t.periodeTahun}-${i}`);
-                any.add(`${t.periodeTahun}-${i}`);
-            }
-        }
-    });
-    return { paidByCategory: byCategory, tahunanPaidSet: tahunan, anyPaidSet: any };
-  }, [residentId, categories, transactions]);
-
-  const isPaidFor = useCallback(
-    (cid: string, key: string) => tahunanPaidSet.has(key) || !!paidByCategory.get(cid)?.has(key),
-    [paidByCategory, tahunanPaidSet]
-  );
+  const paid = useMemo(() => buildPaidState(transactions, categories, residentId), [transactions, categories, residentId]);
+  const anyPaidSet = paid.any;
+  const isPaidFor = (cid: string, key: string) => isPaidForState(paid, cid, key);
 
 
   const totalBulananNominal = useMemo(() => {
@@ -218,38 +184,19 @@ export default function Pembayaran() {
     });
   };
 
-  // Bulan terpilih yang belum lunas untuk kategori tertentu (bulan yang sudah lunas dilewati, tidak ditagih dobel)
-  const monthsToPayFor = (cid: string) =>
-    (monthsByCat[cid] || [])
-      .filter(sm => !isPaidFor(cid, `${sm.tahun}-${sm.bulan}`) && !tahunanYearsSelected.has(sm.tahun))
-      .sort((a, b) => a.tahun - b.tahun || a.bulan - b.bulan);
-
-  let grandTotal = 0;
-  const summaryDetails: { title: string; subTotal: number; id: string }[] = [];
-
-  Object.keys(selectedCategories).forEach(cid => {
-      const cat = categories.find(c => c.id === cid);
-      const isTahunan = cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
-      const isPeriodic = periodicCategories.includes(cid) && !isTahunan;
-      const nom = selectedCategories[cid] || 0;
-
-      if (isTahunan) {
-          summaryDetails.push({ id: cid, title: `${cat?.name} (Lunas Tahun ${yearOf(cid)})`, subTotal: nom });
-          grandTotal += nom;
-      } else if (isPeriodic) {
-          const count = monthsToPayFor(cid).length;
-          const subTotal = nom * count;
-          if (count > 0) {
-              summaryDetails.push({ id: cid, title: `${cat?.name} (${count} bulan)`, subTotal });
-              grandTotal += subTotal;
-          } else {
-              summaryDetails.push({ id: cid, title: `${cat?.name} (Harap pilih bulan)`, subTotal: 0 });
-          }
-      } else {
-          summaryDetails.push({ id: cid, title: cat?.name || 'Lainnya', subTotal: nom });
-          grandTotal += nom;
-      }
+  // Ringkasan, validasi, transaksi yang disimpan & kwitansi berasal dari SATU perhitungan (utils/pembayaran.ts)
+  const plan = buildPaymentPlan({
+    categories,
+    selected: selectedCategories,
+    monthsByCat,
+    yearByCat,
+    defaultYear: currentYear,
+    paid,
   });
+  const grandTotal = plan.grandTotal;
+  const summaryDetails = plan.items.map(item => ({ id: item.id, title: planItemTitle(item), subTotal: item.subTotal }));
+  // Bulan yang akan ditagih untuk kategori bulanan (bulan lunas / tercakup tahunan sudah dibuang)
+  const monthsToPayFor = (cid: string) => plan.items.find(i => i.id === cid)?.months ?? [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,84 +207,25 @@ export default function Pembayaran() {
       return;
     }
 
-    const withoutMonths = periodicCategories.filter(cid => monthsToPayFor(cid).length === 0);
-    if (withoutMonths.length > 0) {
-      const names = withoutMonths.map(cid => categories.find(c => c.id === cid)?.name).join(", ");
-      customAlert("Pilih Bulan", `Pilih minimal 1 bulan untuk: ${names}.`, "warning");
-      return;
-    }
-    
-    if (grandTotal <= 0 && catIds.length > 0) {
-      customAlert("Total Salah", "Total pembayaran tidak valid.", "error");
-      return;
-    }
-
     // Validasi semua kategori DULU, agar tidak ada yang tersimpan sebagian
-    for (const cid of tahunanCategories) {
-      const y = yearOf(cid);
-      // Jika ada bulan di tahun ini yang sudah lunas, iuran tahunan tidak bisa disubmit (karena akan double)
-      if (Array.from({ length: 12 }, (_, i) => i + 1).some(m => anyPaidSet.has(`${y}-${m}`))) {
-        customAlert("Gagal", `Beberapa bulan pada Tahun ${y} sudah memiliki transaksi pembayaran. Batalkan transaksi lama terlebih dahulu.`, "error");
-        return;
-      }
+    if (plan.errors.length > 0) {
+      customAlert("Periksa Pembayaran", plan.errors.join("\n"), "warning");
+      return;
     }
-    // Simpan daftar bulan per kategori sebelum state transaksi berubah (dipakai juga untuk kwitansi)
-    const monthsByCategory: Record<string, { bulan: number; tahun: number }[]> = {};
-    periodicCategories.forEach(cid => { monthsByCategory[cid] = monthsToPayFor(cid); });
 
     const refId = "TRX-" + Date.now().toString().slice(-6);
-
-    const txPromises: Promise<any>[] = [];
-
-    catIds.forEach(cid => {
-       const cat = categories.find(c => c.id === cid);
-       const isTahunan = cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
-       const isPeriodic = periodicCategories.includes(cid) && !isTahunan;
-       const nom = Number(selectedCategories[cid] || 0);
-
-       if (nom <= 0) return;
-
-       if (isTahunan) {
-            const payload: Omit<Transaction, "id"> = {
-              date: new Date(date).toISOString(),
-              categoryId: cid,
-              type: "Pemasukan",
-              nominal: Number(nom),
-              description: `Pembayaran ${cat?.name || 'Iuran Tahunan'} Tahun ${yearOf(cid)}`,
-              residentId,
-              periodeTahun: yearOf(cid),
-              kasLocationId
-            };
-            txPromises.push(addTransaction(payload));
-       } else if (isPeriodic) {
-          // Hanya bulan yang belum lunas untuk kategori ini (cegah double input)
-          (monthsByCategory[cid] || []).forEach((sm) => {
-            const payload: Omit<Transaction, "id"> = {
-              date: new Date(date).toISOString(),
-              categoryId: cid,
-              type: "Pemasukan",
-              nominal: Number(nom),
-              description: `Pembayaran ${cat?.name || 'Iuran'} ${sm.bulan}/${sm.tahun}`,
-              residentId,
-              periodeBulan: sm.bulan,
-              periodeTahun: sm.tahun,
-              kasLocationId
-            };
-            txPromises.push(addTransaction(payload));
-          });
-       } else if (!isPeriodic && !isTahunan) {
-          const payload: Omit<Transaction, "id"> = {
-              date: new Date(date).toISOString(),
-              categoryId: cid,
-              type: "Pemasukan",
-              nominal: Number(nom),
-              description: `Pemasukan Kas (${cat?.name})`,
-              residentId,
-              kasLocationId
-          };
-          txPromises.push(addTransaction(payload));
-       }
-    });
+    const txDate = new Date(date).toISOString();
+    const txPromises = plan.transactions.map(tx => addTransaction({
+      date: txDate,
+      categoryId: tx.categoryId,
+      type: "Pemasukan",
+      nominal: tx.nominal,
+      description: tx.description,
+      residentId,
+      periodeBulan: tx.periodeBulan,
+      periodeTahun: tx.periodeTahun,
+      kasLocationId,
+    }));
 
     // Tunggu semua transaksi tersimpan dulu; kwitansi hanya tampil jika server benar-benar menyimpan
     if (txPromises.length === 0) return;
@@ -353,25 +241,11 @@ export default function Pembayaran() {
     const activeWarga = warga.find(w => w.id === residentId);
 
     setReceiptData({
-      date: new Date(date).toISOString(),
+      date: txDate,
       residentName: activeWarga?.namaKepalaKeluarga || 'Warga',
       residentBlock: activeWarga?.nomorRumah || 'Blok',
-      items: summaryDetails.map(item => {
-        const cat = categories.find(c => c.id === item.id);
-        const isTahunan = cat?.name.toLowerCase().includes("tahunan") || cat?.periode === "Tahunan";
-        const isPeriodic = periodicCategories.includes(item.id) && !isTahunan;
-        if (isPeriodic && monthsByCategory[item.id]?.length) {
-          const monthsStr = monthsByCategory[item.id]
-            .map(sm => `${new Date(2000, sm.bulan - 1).toLocaleString("id-ID", { month: "short" })} ${sm.tahun}`)
-            .join(", ");
-          return { ...item, title: `${item.title} [${monthsStr}]` };
-        }
-        if (isTahunan) {
-          return item;
-        }
-        return item;
-      }),
-      total: grandTotal,
+      items: plan.items.map(item => ({ title: planItemTitle(item, true), subTotal: item.subTotal })),
+      total: plan.grandTotal,
       kasName: kasLocName,
       transactionId: refId
     });

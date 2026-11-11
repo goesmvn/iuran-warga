@@ -69,6 +69,8 @@ export default function Laporan() {
   const pertanggalTransactions = useMemo(() => {
     return transactions
       .filter((t) => {
+        // Tagihan iPaymu yang masih Pending/Failed belum jadi uang kas
+        if (t.status && t.status !== 'Success') return false;
         const tDateOnly = t.date.split("T")[0];
         const inDateRange = tDateOnly >= filterStartDate && tDateOnly <= filterEndDate;
         if (!inDateRange) return false;
@@ -97,7 +99,8 @@ export default function Laporan() {
 
   const totalPemasukanPertanggal = useMemo(() => {
     return pertanggalTransactions
-      .filter((t) => t.type === "Pemasukan" && t.categoryId !== "cat-transfer")
+      // Saldo awal & transfer antar kas bukan pemasukan (sama dengan Dashboard dan Arus Kas)
+      .filter((t) => t.type === "Pemasukan" && t.categoryId !== "cat-transfer" && t.categoryId !== "cat-saldo-awal")
       .reduce((sum, t) => sum + t.nominal, 0);
   }, [pertanggalTransactions]);
 
@@ -346,7 +349,7 @@ export default function Laporan() {
 
   const getCategorySum = (categoryId: string, year: number) => {
     return transactions
-      .filter(t => t.categoryId === categoryId && new Date(t.date).getFullYear() === year)
+      .filter(t => t.categoryId === categoryId && new Date(t.date).getFullYear() === year && (!t.status || t.status === 'Success'))
       .reduce((sum, t) => sum + t.nominal, 0);
   };
 
