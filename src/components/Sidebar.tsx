@@ -171,6 +171,7 @@ export function Sidebar({ mobileOpen, setMobileOpen }: { mobileOpen: boolean, se
                     >
                         <LogOut className="w-4 h-4" /> Keluar Sistem
                     </button>
+                    <p className="text-center text-[10px] text-gray-400 font-medium">JepunKas v{__APP_VERSION__}</p>
                 </div>
 
             </aside>
