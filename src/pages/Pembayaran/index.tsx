@@ -67,7 +67,7 @@ export default function Pembayaran() {
       customAlert("Sukses", "Warga baru berhasil ditambahkan.", "success");
     } catch (err) {
       console.error(err);
-      customAlert("Gagal", "Gagal menambahkan warga baru.", "error");
+      customAlert("Gagal", `Gagal menambahkan warga baru. ${err instanceof Error ? err.message : ''}`, "error");
     }
   };
   const [kasLocationId, setKasLocationId] = useState(DEFAULT_KAS_LOCATION_ID);
@@ -262,7 +262,7 @@ export default function Pembayaran() {
       }
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const catIds = Object.keys(selectedCategories);
 
@@ -350,6 +350,16 @@ export default function Pembayaran() {
        }
     });
 
+    // Tunggu semua transaksi tersimpan dulu; kwitansi hanya tampil jika server benar-benar menyimpan
+    if (txPromises.length === 0) return;
+    try {
+      await Promise.all(txPromises);
+    } catch (err) {
+      console.error("Gagal menyimpan beberapa transaksi:", err);
+      customAlert("Gagal Menyimpan", `Pembayaran tidak tersimpan ke database. ${err instanceof Error ? err.message : ''}`, "error");
+      return;
+    }
+
     const kasLocName = locations.find(l => l.id === kasLocationId)?.name || 'Pusat';
     const activeWarga = warga.find(w => w.id === residentId);
 
@@ -376,13 +386,7 @@ export default function Pembayaran() {
       kasName: kasLocName,
       transactionId: refId
     });
-
     // Reset Form (handled on receipt modal close now to prevent UI flickering)
-    Promise.all(txPromises).then(() => {
-      // no-op, state resets on onClose ReceiptModal
-    }).catch(err => {
-      console.error("Gagal menyimpan beberapa transaksi:", err);
-    });
   };
 
   const getResidentName = (id?: string) =>

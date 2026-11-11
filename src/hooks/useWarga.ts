@@ -46,11 +46,15 @@ export function useWarga() {
         setWarga(prev => [...prev, payload]); // Optimistic update
         
         try {
-            await apiFetch('/api/warga', {
+            const res = await apiFetch('/api/warga', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: 'Gagal menyimpan warga.' }));
+                throw new Error(err.error || 'Gagal menyimpan warga.');
+            }
         } catch (err) {
             console.error("Failed to add Warga. Rolling back UI.", err);
             setWarga(prev => prev.filter(w => w.id !== id)); // Rollback addition
