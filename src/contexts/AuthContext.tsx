@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '../types';
+import { clearCache } from '../utils/offlineSync';
 
 interface AuthContextType {
   user: User | null;
@@ -73,7 +74,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const login = useCallback((newUser: User) => setUser(newUser), []);
-  const logout = useCallback(() => setUser(null), []);
+  const logout = useCallback(() => {
+    clearCache(); // jangan tinggalkan data warga di perangkat setelah keluar
+    setUser(null);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>

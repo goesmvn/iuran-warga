@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { CloudOff, RefreshCw, CheckCircle2, AlertTriangle, X } from "lucide-react";
-import { dismissFailed, flushQueue, getSyncStatus, subscribeSync, type SyncStatus as Status } from "../utils/offlineSync";
+import { dismissFailed, flushQueue, getSyncStatus, retryFailed, subscribeSync, type SyncStatus as Status } from "../utils/offlineSync";
 
 const describe = (method: string, url: string) => {
     const action = method === "POST" ? "Tambah" : method === "PUT" ? "Ubah" : "Hapus";
@@ -72,7 +72,10 @@ export function SyncStatus() {
                                         <p className="text-xs text-red-700">{f.error}</p>
                                         <p className="text-[10px] text-gray-500">{new Date(f.createdAt).toLocaleString("id-ID")}</p>
                                     </div>
-                                    <button type="button" onClick={() => dismissFailed(f.qid)} className="text-xs font-bold text-gray-500 hover:text-gray-800 self-start">Tutup</button>
+                                    <div className="flex flex-col gap-1 self-start">
+                                        <button type="button" onClick={() => retryFailed(f.qid)} className="text-xs font-bold text-blue-600 hover:text-blue-800">Coba lagi</button>
+                                        <button type="button" onClick={() => dismissFailed(f.qid)} className="text-xs font-bold text-gray-500 hover:text-gray-800">Tutup</button>
+                                    </div>
                                 </div>
                             ))}
                         </div>

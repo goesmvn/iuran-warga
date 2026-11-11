@@ -95,6 +95,24 @@ export function subscribeSync(listener: (s: SyncStatus) => void) {
   return () => { listeners.delete(listener); };
 }
 
+/** Kirim ulang item yang gagal (mis. server error berulang) tanpa kehilangan datanya. */
+export function retryFailed(qid: string) {
+  const item = getFailed().find(f => f.qid === qid);
+  if (!item) return;
+  setFailed(getFailed().filter(f => f.qid !== qid));
+  const { qid: id, method, url, body, createdAt } = item;
+  setQueue([...getQueue(), { qid: id, method, url, body, createdAt, attempts: 0 }]);
+  notify();
+  flushQueue();
+}
+
+/** Hapus salinan data (berisi data pribadi warga) dari perangkat. Antrean yang belum terkirim TIDAK dihapus. */
+export function clearCache() {
+  Object.keys(localStorage)
+    .filter(k => k.startsWith(CACHE_PREFIX))
+    .forEach(k => localStorage.removeItem(k));
+}
+
 export function dismissFailed(qid: string) {
   setFailed(getFailed().filter(f => f.qid !== qid));
   notify();
@@ -172,6 +190,8 @@ export function flushQueue(): Promise<void> {
       } else if (res.status === 401) {
         authExpired = true; // perlu login ulang; antrean tetap disimpan
         break;
+      } else if (res.status === 429) {
+        break; // server sedang membatasi permintaan; data aman di antrean, coba lagi nanti
       } else if (res.status >= 500 && item.attempts + 1 < MAX_SERVER_ERROR_ATTEMPTS) {
         item.attempts += 1;
         setQueue([item, ...getQueue().slice(1)]);

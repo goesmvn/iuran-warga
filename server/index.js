@@ -12,6 +12,7 @@ import { startBackupScheduler, runAutoBackup } from './backup.js';
 
 import { connectToWhatsApp, getStatus, logout, sendMessage } from './whatsapp/index.js';
 import { createPayment, checkTransaction } from './ipaymu.js';
+import { getUnpaidMonths, normalizePhone } from './iuran.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,6 +64,11 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' })); // iPaymu sends W
 // =====================================================================
 // RATE LIMITERS
 // =====================================================================
+// Di belakang Caddy (localhost / jaringan Docker), IP asli ada di X-Forwarded-For.
+// Tanpa ini semua pengguna terlihat ber-IP sama: batas login 10x berlaku untuk SEMUA orang sekaligus.
+// Hanya proxy lokal/privat yang dipercaya, jadi klien dari internet tidak bisa memalsukan IP-nya.
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, uniquelocal');
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500, // tightened from 1000
@@ -146,7 +152,7 @@ app.use('/api', (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET, { algorithms: ['HS256'] });
     req.user = decoded;
     next();
   } catch (err) {
@@ -487,41 +493,6 @@ app.post('/api/whatsapp/logout', requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
-// Hitung bulan iuran yang belum dibayar seorang warga, dari Januari start_year s/d bulan berjalan.
-// Logika sama dengan halaman Pembayaran: kategori bulanan menandai 1 bulan, kategori tahunan menandai 12 bulan.
-// Transaksi Pending/Failed tidak dihitung sebagai lunas.
-function getUnpaidMonths(residentId, startYear) {
-  const categories = db.prepare('SELECT id, name, periode FROM categories').all();
-  const bulananIds = new Set(categories.filter(c => c.periode === 'Bulanan' || c.name.toLowerCase().includes('bulanan')).map(c => c.id));
-  const tahunanIds = new Set(categories.filter(c => c.periode === 'Tahunan' || c.name.toLowerCase().includes('tahunan')).map(c => c.id));
-
-  const paidTx = db.prepare(`
-    SELECT categoryId, periodeBulan, periodeTahun FROM transactions
-    WHERE residentId = ? AND type = 'Pemasukan' AND (status IS NULL OR status = 'Success') AND periodeTahun IS NOT NULL
-  `).all(residentId);
-
-  const paid = new Set();
-  for (const t of paidTx) {
-    if (tahunanIds.has(t.categoryId)) {
-      for (let m = 1; m <= 12; m++) paid.add(`${t.periodeTahun}-${m}`);
-    } else if (t.periodeBulan && bulananIds.has(t.categoryId)) {
-      paid.add(`${t.periodeTahun}-${t.periodeBulan}`);
-    }
-  }
-
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-  const unpaid = [];
-  for (let y = startYear; y <= currentYear; y++) {
-    const lastMonth = y === currentYear ? currentMonth : 12;
-    for (let m = 1; m <= lastMonth; m++) {
-      if (!paid.has(`${y}-${m}`)) unpaid.push({ year: y, month: m });
-    }
-  }
-  return unpaid;
-}
-
 // Fungsi eksekutor broadcast, dipisahkan agar bisa dipanggil dari API maupun Scheduler/CronJob
 export async function executeBroadcast(templateStr) {
   const status = getStatus();
@@ -626,7 +597,7 @@ export async function executeBroadcast(templateStr) {
       try {
         await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
 
-        const jid = `${warga.phone.replace(/^0/, '62').replace(/\D/g, '')}@s.whatsapp.net`;
+        const jid = `${normalizePhone(warga.phone)}@s.whatsapp.net`;
         await sendMessage(jid, message);
         successCount++;
       } catch (err) {
@@ -726,7 +697,7 @@ app.post('/api/broadcast/test', requireAdmin, async (req, res) => {
     .replace(/\{\{rekening\}\}/g, settings.rekening_tujuan || '');
 
   try {
-    const jid = `${phone.replace(/^0/, '62').replace(/\D/g, '')}@s.whatsapp.net`;
+    const jid = `${normalizePhone(phone)}@s.whatsapp.net`;
     await sendMessage(jid, message);
     res.json({ success: true });
   } catch (err) {
@@ -789,15 +760,12 @@ app.post('/api/ipaymu/callback', async (req, res) => {
             const w = db.prepare('SELECT phone, namaKepalaKeluarga FROM warga WHERE id = ?').get(tx.residentId);
             if (w && w.phone) {
                const msg = `Terima kasih Bapak/Ibu ${w.namaKepalaKeluarga}, pembayaran iuran sebesar Rp ${paidAmount.toLocaleString('id-ID')} telah berhasil diverifikasi otomatis oleh sistem. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
-               const jid = `${w.phone.replace(/^0/, '62').replace(/\D/g, '')}@s.whatsapp.net`;
+               const jid = `${normalizePhone(w.phone)}@s.whatsapp.net`;
                await sendMessage(jid, msg);
             }
           } else {
-             // Simulasi notifikasi untuk Test Broadcast
-             console.log(`[Testing] Sending real WA receipt to tester...`);
-             const msg = `Terima kasih Bapak/Ibu Tester, pembayaran iuran sebesar Rp ${paidAmount.toLocaleString('id-ID')} telah berhasil diverifikasi otomatis oleh sistem. (Ini adalah simulasi Webhook JepunKas) 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
-             const jid = `6285190321727@s.whatsapp.net`; // Hardcoded nomor tester
-             await sendMessage(jid, msg);
+             // Tagihan uji coba (tanpa warga): tidak ada penerima WA, cukup dicatat di log
+             console.log(`[Webhook] Test payment ${reference_id} verified: Rp ${paidAmount.toLocaleString('id-ID')}`);
           }
         } catch (e) {
           console.error('[Webhook WA Notify Error]', e.message);

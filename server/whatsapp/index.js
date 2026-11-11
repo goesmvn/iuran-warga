@@ -3,6 +3,7 @@ import qrcode from 'qrcode';
 import fs from 'fs';
 import path from 'path';
 import db from '../db.js'; // Import SQLite DB
+import { getUnpaidMonths, normalizePhone } from '../iuran.js';
 
 const authDir = path.join(process.cwd(), 'data', 'whatsapp-auth');
 
@@ -107,49 +108,44 @@ export async function connectToWhatsApp() {
     // MENU 4: CEK TAGIHAN PERSONAL
     // ============================================
     else if (['2', 'cek tagihan', 'tagihan saya', 'tunggakan', 'berapa tagihan', 'cek'].includes(command)) {
-      // 1. Ekstrak nomor HP pengirim dari JID (Contoh: 628123456789@s.whatsapp.net -> 08123456789)
-      let phoneNum = senderJid.split('@')[0];
-      // Format ke '08xxx' supaya cocok dengan database warga yang umum diisi warga Indonesia
-      if (phoneNum.startsWith('62')) {
-        phoneNum = '0' + phoneNum.substring(2); 
-      }
-      
-      // 2. Cari warga berdasarkan nomor HP
-      // Kita pakai operator LIKE agar 0812... dan +62812... bisa match
-      const warga = db.prepare("SELECT id, namaKepalaKeluarga, nomorRumah FROM warga WHERE phone LIKE ? AND status = 'Aktif'").get(`%${phoneNum.substring(1)}%`);
-      
+      // 1. Nomor HP pengirim. WhatsApp kini bisa memakai LID (ID anonim, bukan nomor HP);
+      //    nomor asli ada di remoteJidAlt. Jangan pernah mencocokkan LID ke nomor warga.
+      const pnJid = senderJid.endsWith('@s.whatsapp.net') ? senderJid : (m.key.remoteJidAlt || m.key.senderPn || '');
+      const senderPhone = pnJid.endsWith('@s.whatsapp.net') ? normalizePhone(pnJid.split('@')[0]) : null;
+
+      // 2. Cari warga dengan nomor yang SAMA PERSIS (bukan LIKE/sebagian, agar data warga lain tidak bocor)
+      const warga = senderPhone
+        ? db.prepare("SELECT id, namaKepalaKeluarga, nomorRumah, phone FROM warga WHERE status = 'Aktif' AND phone IS NOT NULL AND phone != ''")
+            .all()
+            .find(w => normalizePhone(w.phone) === senderPhone)
+        : undefined;
+
       if (!warga) {
         await sock.sendMessage(senderJid, { text: `Mohon maaf, nomor HP Anda tidak ditemukan dalam data warga aktif JepunKas.\n\nJika Anda warga lingkungan ini, silakan hubungi Pengurus untuk mendaftarkan nomor ini.` });
         return;
       }
 
-      // 3. Cek Tagihan Pending dari iPaymu
-      const pendingTx = db.prepare(`SELECT nominal, referenceId FROM transactions WHERE residentId = ? AND status = 'Pending'`).get(warga.id);
-      
+      // 3. Cek Tagihan Pending dari iPaymu (satu tagihan bisa berisi beberapa bulan dengan referenceId sama)
+      const pendingTx = db.prepare(`
+        SELECT referenceId, SUM(nominal) AS total, COUNT(*) AS months FROM transactions
+        WHERE residentId = ? AND status = 'Pending' GROUP BY referenceId ORDER BY MAX(createdAt) DESC
+      `).get(warga.id);
+
       if (pendingTx) {
-        // Ada tunggakan aktif yang menggantung (sudah ter-broadcast sebelumnya)
-        // Kita tidak buat link baru untuk mencegah spam API iPaymu, cukup suruh klik link lama atau bayar manual.
-        // Jika Anda ingin membuat link baru, logic createPayment bisa ditempelkan disini. Tapi lebih rapi kasih peringatan saja.
-        const tagihanMsg = `Halo Bapak/Ibu *${warga.namaKepalaKeluarga}* (${warga.nomorRumah}).\n\nCatatan sistem kami menunjukkan Anda memiliki tunggakan/tagihan Kas yang belum dibayar sebesar:\n*Rp ${pendingTx.nominal.toLocaleString('id-ID')}*\n\n_(Nominal ini sudah disesuaikan dengan biaya admin sistem)._\n\nSilakan cek pesan kami sebelumnya yang berisi Link Pembayaran Otomatis, atau gunakan perintah *REKENING* untuk transfer manual. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
+        // Tidak membuat link baru untuk mencegah spam API iPaymu; arahkan ke link yang sudah dikirim.
+        const tagihanMsg = `Halo Bapak/Ibu *${warga.namaKepalaKeluarga}* (${warga.nomorRumah}).\n\nAnda memiliki tagihan Kas yang belum dibayar sebesar:\n*Rp ${pendingTx.total.toLocaleString('id-ID')}* (${pendingTx.months} bulan)\n\n_(Belum termasuk biaya aplikasi pembayaran online)._\n\nSilakan gunakan Link Pembayaran pada pesan tagihan kami sebelumnya, atau hubungi Pengurus untuk bayar tunai. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._`;
         await sock.sendMessage(senderJid, { text: tagihanMsg });
       } else {
-        // Cek secara kasar apakah bulan ini sudah bayar?
-        const currentMonth = new Date().getMonth() + 1;
-        const currentYear = new Date().getFullYear();
-        
-        const paidThisMonth = db.prepare(`
-          SELECT id FROM transactions 
-          WHERE residentId = ? AND type = 'Pemasukan' AND categoryId = 'cat-1' 
-          AND (status = 'Success' OR status IS NULL)
-          AND periodeBulan = ? AND periodeTahun = ?
-        `).get(warga.id, currentMonth, currentYear);
+        // Hitung tunggakan lengkap (semua bulan jatuh tempo sejak start_year), sama dengan broadcast & aplikasi
+        const startYear = parseInt(settings.start_year, 10) || new Date().getFullYear();
+        const unpaid = getUnpaidMonths(warga.id, startYear);
+        const nominal = Number(settings.nominal_iuran_bulanan) || 0;
 
-        if (paidThisMonth) {
-           await sock.sendMessage(senderJid, { text: `Halo Bapak/Ibu *${warga.namaKepalaKeluarga}* (${warga.nomorRumah}).\n\nTerima kasih! Catatan kami menunjukkan Anda *TIDAK MEMILIKI TUNGGAKAN* dan iuran bulan ini sudah *LUNAS*. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._` });
+        if (unpaid.length === 0) {
+           await sock.sendMessage(senderJid, { text: `Halo Bapak/Ibu *${warga.namaKepalaKeluarga}* (${warga.nomorRumah}).\n\nTerima kasih! Catatan kami menunjukkan Anda *TIDAK MEMILIKI TUNGGAKAN* dan iuran sampai bulan ini sudah *LUNAS*. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._` });
         } else {
-           // Belum lunas bulan ini, tapi belum ada link Pending (Belum di broadcast admin)
-           const nominal = Number(settings.nominal_iuran_bulanan) || 0;
-           await sock.sendMessage(senderJid, { text: `Halo Bapak/Ibu *${warga.namaKepalaKeluarga}* (${warga.nomorRumah}).\n\nAnda tercatat *belum* membayar iuran untuk bulan ini.\nTagihan bulan ini: *Rp ${nominal.toLocaleString('id-ID')}*.\n\nKarena belum ada link pembayaran yang diterbitkan untuk Anda, mohon tunggu pesan Broadcast Tagihan dari Admin atau hubungi Pengurus untuk men-generate tagihan. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._` });
+           const bulan = unpaid.map(u => `${new Date(2000, u.month - 1).toLocaleString('id-ID', { month: 'short' })} ${u.year}`).join(', ');
+           await sock.sendMessage(senderJid, { text: `Halo Bapak/Ibu *${warga.namaKepalaKeluarga}* (${warga.nomorRumah}).\n\nAnda tercatat belum membayar iuran *${unpaid.length} bulan*:\n${bulan}\n\nTotal: *Rp ${(nominal * unpaid.length).toLocaleString('id-ID')}*\n\nMohon tunggu pesan Tagihan dari Admin yang berisi link pembayaran, atau hubungi Pengurus untuk bayar tunai. 🙏\n\n_Ketik *0* untuk kembali ke Menu Utama._` });
         }
       }
     }
