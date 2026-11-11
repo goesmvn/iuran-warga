@@ -109,7 +109,7 @@ export default function Login() {
         </form>
 
         <div className="py-4 text-center text-xs font-semibold text-gray-400 border-t border-gray-100 bg-gray-50/50">
-          JepunKas - Sistem Iuran v1.0.0
+          JepunKas - Sistem Iuran v{__APP_VERSION__}
         </div>
       </div>
     </div>
