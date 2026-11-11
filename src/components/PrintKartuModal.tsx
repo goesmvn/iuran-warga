@@ -274,7 +274,7 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
             <div className={`grid ${isThermal ? 'grid-cols-1' : 'grid-cols-2'} text-center font-medium ${isThermal ? 'mt-8 text-xs' : 'mt-12 text-sm'} break-inside-avoid`}>
                {!isThermal && <div></div>}
                <div>
-                  <p>Denpasar, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
+                  <p>{settings['nama_desa'] || 'Denpasar'}, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
                   <p className={isThermal ? 'mb-12' : 'mb-20'}>Pengurus Kas / Bendahara</p>
                   <p className="font-bold underline uppercase pt-2">{namaBendahara}</p>
                </div>
