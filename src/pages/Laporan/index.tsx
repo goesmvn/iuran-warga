@@ -164,6 +164,7 @@ export default function Laporan() {
         .filter(
           (t) =>
             t.type === "Pemasukan" &&
+            (!t.status || t.status === "Success") &&
             t.periodeBulan === filterMonth &&
             t.periodeTahun === filterYear,
         )
@@ -179,6 +180,7 @@ export default function Laporan() {
             .filter(
               (t) =>
                 t.type === "Pemasukan" &&
+                (!t.status || t.status === "Success") &&
                 t.residentId === w.id &&
                 t.periodeTahun === filterYear,
             )

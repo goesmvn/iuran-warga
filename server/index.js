@@ -463,6 +463,41 @@ app.post('/api/whatsapp/logout', requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
+// Hitung bulan iuran yang belum dibayar seorang warga, dari Januari start_year s/d bulan berjalan.
+// Logika sama dengan halaman Pembayaran: kategori bulanan menandai 1 bulan, kategori tahunan menandai 12 bulan.
+// Transaksi Pending/Failed tidak dihitung sebagai lunas.
+function getUnpaidMonths(residentId, startYear) {
+  const categories = db.prepare('SELECT id, name, periode FROM categories').all();
+  const bulananIds = new Set(categories.filter(c => c.periode === 'Bulanan' || c.name.toLowerCase().includes('bulanan')).map(c => c.id));
+  const tahunanIds = new Set(categories.filter(c => c.periode === 'Tahunan' || c.name.toLowerCase().includes('tahunan')).map(c => c.id));
+
+  const paidTx = db.prepare(`
+    SELECT categoryId, periodeBulan, periodeTahun FROM transactions
+    WHERE residentId = ? AND type = 'Pemasukan' AND (status IS NULL OR status = 'Success') AND periodeTahun IS NOT NULL
+  `).all(residentId);
+
+  const paid = new Set();
+  for (const t of paidTx) {
+    if (tahunanIds.has(t.categoryId)) {
+      for (let m = 1; m <= 12; m++) paid.add(`${t.periodeTahun}-${m}`);
+    } else if (t.periodeBulan && bulananIds.has(t.categoryId)) {
+      paid.add(`${t.periodeTahun}-${t.periodeBulan}`);
+    }
+  }
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const unpaid = [];
+  for (let y = startYear; y <= currentYear; y++) {
+    const lastMonth = y === currentYear ? currentMonth : 12;
+    for (let m = 1; m <= lastMonth; m++) {
+      if (!paid.has(`${y}-${m}`)) unpaid.push({ year: y, month: m });
+    }
+  }
+  return unpaid;
+}
+
 // Fungsi eksekutor broadcast, dipisahkan agar bisa dipanggil dari API maupun Scheduler/CronJob
 export async function executeBroadcast(templateStr) {
   const status = getStatus();
@@ -474,6 +509,7 @@ export async function executeBroadcast(templateStr) {
   const wargaList = db.prepare('SELECT id, namaKepalaKeluarga, nomorRumah, phone FROM warga WHERE status = "Aktif"').all();
   const settings = db.prepare('SELECT key, value FROM settings').all().reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
   const nominal = Number(settings.nominal_iuran_bulanan) || 0;
+  const startYear = parseInt(settings.start_year, 10) || new Date().getFullYear();
 
   // Gunakan template dari param, atau fallback ke DB
   const template = templateStr || settings['wa_template_tunggakan'];
@@ -488,11 +524,12 @@ export async function executeBroadcast(templateStr) {
       continue;
     }
 
-    // Check tunggakan
-    // This logic is a placeholder. You'd calculate actual dues here.
-    const monthsDue = 2; // Contoh: 1 bulan ini + 1 bulan lalu
-    const tunggakan = nominal * (monthsDue - 1);
+    const unpaidMonths = getUnpaidMonths(warga.id, startYear);
+    const monthsDue = unpaidMonths.length;
+    const now = new Date();
+    const currentMonthUnpaid = unpaidMonths.some(u => u.year === now.getFullYear() && u.month === now.getMonth() + 1);
     const totalDue = nominal * monthsDue;
+    const tunggakan = totalDue - (currentMonthUnpaid ? nominal : 0); // di luar bulan berjalan
 
     if (totalDue > 0) {
       let paymentLink = '#';
@@ -504,10 +541,9 @@ export async function executeBroadcast(templateStr) {
       const totalBilledToIPaymu = totalDue + withdrawalFee;
 
       // Mencegah Tagihan Ganda / Kedaluwarsa:
-      const existingPending = db.prepare(`SELECT id, referenceId FROM transactions WHERE residentId = ? AND status = 'Pending'`).get(warga.id);
+      const cancelled = db.prepare(`UPDATE transactions SET status = 'Failed', description = description || ' (Dibatalkan sistem - Diganti tagihan baru)' WHERE residentId = ? AND status = 'Pending'`).run(warga.id);
 
-      if (existingPending) {
-         db.prepare(`UPDATE transactions SET status = 'Failed', description = description || ' (Dibatalkan sistem - Diganti tagihan baru)' WHERE id = ?`).run(existingPending.id);
+      if (cancelled.changes > 0) {
          console.log(`[Broadcast] Membatalkan tagihan lama milik ${warga.namaKepalaKeluarga} dan membuat ulang.`);
       }
 
@@ -523,24 +559,31 @@ export async function executeBroadcast(templateStr) {
            });
            paymentLink = payment.Url;
 
-           // Simpan DRAFT transaksi sebagai "Pending"
-           db.prepare(`
+           // Simpan DRAFT transaksi "Pending", 1 baris per bulan tertunggak dengan referenceId yang sama,
+           // agar saat lunas setiap bulan tercatat terbayar di laporan.
+           const insertPending = db.prepare(`
              INSERT INTO transactions (id, date, categoryId, type, nominal, description, residentId, periodeBulan, periodeTahun, kasLocationId, status, referenceId)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           `).run(
-             `tx-${Date.now()}-${warga.id}`,
-             new Date().toISOString().split('T')[0],
-             'cat-1',
-             'Pemasukan',
-             totalDue,
-             `Pembayaran Broadcast Tunggakan (${monthsDue} bln)`,
-             warga.id,
-             new Date().getMonth() + 1,
-             new Date().getFullYear(),
-             'loc-default',
-             'Pending',
-             referenceId
-           );
+           `);
+           const txDate = new Date().toISOString().split('T')[0];
+           db.transaction(() => {
+             for (const u of unpaidMonths) {
+               insertPending.run(
+                 `tx-${Date.now()}-${warga.id}-${u.year}-${u.month}`,
+                 txDate,
+                 'cat-1',
+                 'Pemasukan',
+                 nominal,
+                 `Pembayaran Broadcast Tunggakan (${monthsDue} bln)`,
+                 warga.id,
+                 u.month,
+                 u.year,
+                 'loc-default',
+                 'Pending',
+                 referenceId
+               );
+             }
+           })();
         }
       } catch (err) {
         console.error('iPaymu error:', err.message);
@@ -694,8 +737,10 @@ app.post('/api/ipaymu/callback', async (req, res) => {
       return res.status(400).send('Bad Request');
     }
 
-    const tx = db.prepare('SELECT id, status, residentId, nominal FROM transactions WHERE referenceId = ?').get(reference_id);
+    const tx = db.prepare('SELECT id, status, residentId FROM transactions WHERE referenceId = ?').get(reference_id);
     if (!tx) return res.status(404).send('Not Found');
+    // Satu tagihan bisa terdiri dari beberapa baris (1 per bulan tertunggak)
+    const billedTotal = db.prepare('SELECT SUM(nominal) AS total FROM transactions WHERE referenceId = ?').get(reference_id).total;
 
     const statusDesc = String(validData.StatusDesc || '').toLowerCase();
     const paidAmount = Number(validData.Amount ?? validData.Total);
@@ -704,8 +749,8 @@ app.post('/api/ipaymu/callback', async (req, res) => {
     // Sesuai dokumentasi iPaymu v2, "escrow" berarti buyer sudah bayar tapi dana masuk ke rekening penampungan iPaymu sementara. Kita anggap ini LUNAS untuk warga.
     if (validData.Status === 2 || validData.Status === 6 || statusDesc === 'berhasil' || statusDesc === 'escrow') {
       // [SEC] Nominal yang dibayar minimal harus sebesar tagihan
-      if (!(paidAmount >= tx.nominal)) {
-        console.warn(`[Webhook] Nominal kurang untuk ${reference_id}: dibayar ${paidAmount}, tagihan ${tx.nominal}`);
+      if (!(paidAmount >= billedTotal)) {
+        console.warn(`[Webhook] Nominal kurang untuk ${reference_id}: dibayar ${paidAmount}, tagihan ${billedTotal}`);
         return res.status(400).send('Amount Mismatch');
       }
 
