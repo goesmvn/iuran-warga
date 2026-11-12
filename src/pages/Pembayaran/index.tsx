@@ -270,10 +270,50 @@ export default function Pembayaran() {
     );
 
     if (isTahunan) {
+      // Status 12 bulan di tahun terpilih. Aturan sama dengan validasi buildPaymentPlan:
+      // bila ada bulan yang sudah lunas, iuran tahunan ditolak agar tidak dobel.
+      const months = Array.from({ length: 12 }, (_, i) => i + 1);
+      const paidMonths = months.filter(m => anyPaidSet.has(`${year}-${m}`));
+      const emptyMonths = months.filter(m => !anyPaidSet.has(`${year}-${m}`));
       return (
-        <div className="mt-2 pl-8 flex items-center gap-3 flex-wrap animate-in slide-in-from-top-2 duration-200">
-          {yearSelect}
-          <p className="text-xs text-orange-800">Melunasi seluruh iuran bulanan selama <b>Tahun {year}</b>.</p>
+        <div className="mt-2 pl-8 space-y-3 animate-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-xs font-bold text-orange-800">Status bulan di tahun ini:</span>
+            {yearSelect}
+          </div>
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2" aria-label={`Status iuran tahun ${year}`}>
+            {months.map((m) => {
+              const lunas = anyPaidSet.has(`${year}-${m}`);
+              return (
+                <div
+                  key={m}
+                  className={`px-1 py-2 rounded-xl text-sm font-bold border-2 flex flex-col items-center justify-center gap-0.5 ${
+                    lunas ? "bg-green-50 text-green-700 border-green-200" : "bg-white text-gray-500 border-dashed border-gray-300"
+                  }`}
+                >
+                  {lunas ? <Check className="w-4 h-4 text-green-600" /> : <span className="w-4 h-4" />}
+                  <span className="uppercase text-[11px] tracking-wider">{monthLabel(m)}</span>
+                  <span className={`text-[9px] font-semibold ${lunas ? "text-green-600" : "text-gray-400"}`}>{lunas ? "Lunas" : "Kosong"}</span>
+                </div>
+              );
+            })}
+          </div>
+          {!residentId ? (
+            <p className="text-xs text-orange-700">Pilih warga dulu agar status tiap bulan terlihat.</p>
+          ) : paidMonths.length === 0 ? (
+            <p className="text-xs font-semibold text-green-700 bg-green-50 rounded-lg px-3 py-2">
+              12 bulan masih kosong — iuran tahunan ini akan melunasi Januari s/d Desember {year}.
+            </p>
+          ) : emptyMonths.length === 0 ? (
+            <p className="text-xs font-semibold text-gray-700 bg-gray-100 rounded-lg px-3 py-2">
+              Tahun {year} sudah lunas semua. Pilih tahun lain untuk bayar di muka.
+            </p>
+          ) : (
+            <p className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              {paidMonths.length} bulan sudah lunas, {emptyMonths.length} bulan masih kosong ({emptyMonths.map(monthLabel).join(", ")}).
+              Iuran tahunan tidak bisa dipakai agar tidak dobel — gunakan iuran bulanan untuk bulan yang kosong.
+            </p>
+          )}
         </div>
       );
     }
