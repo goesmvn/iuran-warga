@@ -1,5 +1,6 @@
 import { todayLocal } from "../../utils/date";
 import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
@@ -75,7 +76,9 @@ export default function Pembayaran() {
   const [kasLocationId, setKasLocationId] = useState(DEFAULT_KAS_LOCATION_ID);
 
   const [searchWarga, setSearchWarga] = useState("");
-  const [residentId, setResidentId] = useState("");
+  // Dari Dashboard ("Tunggakan Terbanyak") warga bisa langsung terpilih lewat ?warga=<id>
+  const [searchParams] = useSearchParams();
+  const [residentId, setResidentId] = useState(() => searchParams.get("warga") || "");
   // Pilihan periode per iuran: bulan untuk iuran bulanan, tahun untuk iuran tahunan
   const [monthsByCat, setMonthsByCat] = useState<Record<string, { bulan: number; tahun: number }[]>>({});
   const [yearByCat, setYearByCat] = useState<Record<string, number>>({});

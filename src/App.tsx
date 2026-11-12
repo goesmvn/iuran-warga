@@ -71,7 +71,8 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         collapsed={sidebarCollapsed} 
         setCollapsed={setSidebarCollapsed} 
       />
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out print:pl-0 print:block print:min-h-0 ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
+      {/* min-w-0: tanpa ini tabel lebar (mis. laporan) melebarkan seluruh halaman di HP */}
+      <div className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-300 ease-in-out print:pl-0 print:block print:min-h-0 ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
         <Header setMobileOpen={setMobileOpen} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto print:p-0 print:m-0 print:overflow-visible h-[calc(100vh-4rem)]">
           {/* pb ekstra di HP agar konten tidak tertutup navigasi bawah */}
@@ -79,7 +80,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             {children}
           </div>
         </main>
-        <BottomNav />
+        <BottomNav onOpenMenu={() => setMobileOpen(true)} />
       </div>
     </div>
   );

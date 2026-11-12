@@ -2,6 +2,7 @@ import { todayLocal } from "../../utils/date";
 import { useState, useMemo } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useKasLocation, DEFAULT_KAS_LOCATION_ID } from "../../hooks/useKasLocation";
+import { useConfirm } from "../../contexts/ConfirmContext";
 import {
   ArrowRightLeft,
   ArrowRight,
@@ -19,6 +20,21 @@ const TRANSFER_CATEGORY_ID = "cat-transfer";
 
 export default function Transfer() {
   const { transactions, addTransaction } = useTransaksi();
+  const { alert: customAlert, confirm } = useConfirm();
+  const [repairing, setRepairing] = useState<string | null>(null);
+
+  // Transfer yang hanya tercatat sisi "keluar" (versi lama bisa gagal menyimpan sisi "masuk" tanpa pesan).
+  // Uangnya hilang dari pembukuan: saldo kas tujuan terlalu kecil & Dashboard tidak cocok dengan Laporan.
+  const brokenTransfers = useMemo(() => {
+    const groups = new Map<string, typeof transactions>();
+    for (const t of transactions) {
+      if (t.categoryId !== TRANSFER_CATEGORY_ID || !t.transferId || (t.status && t.status !== "Success")) continue;
+      groups.set(t.transferId, [...(groups.get(t.transferId) || []), t]);
+    }
+    return [...groups.values()]
+      .filter(legs => legs.length === 1 && legs[0].type === "Pengeluaran" && legs[0].transferToKasLocationId)
+      .map(legs => legs[0]);
+  }, [transactions]);
   const { locations } = useKasLocation();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -118,6 +134,7 @@ export default function Transfer() {
     const toName = getLocationName(toKasId);
     const desc = description || `Transfer dari ${fromName} ke ${toName}`;
 
+    try {
     // Create outgoing transaction (pengeluaran from source)
     await addTransaction({
       date: isoDate,
@@ -140,10 +157,41 @@ export default function Transfer() {
       kasLocationId: toKasId,
       transferId,
     });
+    } catch (err) {
+      await customAlert("Transfer Gagal Disimpan", `${err instanceof Error ? err.message : "Terjadi kesalahan."} Periksa daftar transfer: jika hanya sisi keluar yang tercatat, gunakan tombol "Lengkapi".`, "error");
+      return;
+    }
 
     setIsModalOpen(false);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
+  };
+
+  const repairTransfer = async (out: (typeof brokenTransfers)[number]) => {
+    const toName = getLocationName(out.transferToKasLocationId!);
+    const ok = await confirm(
+      "Lengkapi Transfer",
+      `Catat uang *Rp ${out.nominal.toLocaleString("id-ID")}* masuk ke *${toName}* untuk transfer tanggal ${new Date(out.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}?\n\nLakukan ini hanya jika uangnya memang sudah diterima di ${toName}.`,
+      "info"
+    );
+    if (!ok) return;
+    setRepairing(out.transferId!);
+    try {
+      await addTransaction({
+        date: out.date,
+        categoryId: TRANSFER_CATEGORY_ID,
+        type: "Pemasukan",
+        nominal: out.nominal,
+        description: out.description,
+        kasLocationId: out.transferToKasLocationId!,
+        transferId: out.transferId,
+      });
+      await customAlert("Transfer Dilengkapi", `Saldo ${toName} sudah diperbarui.`, "success");
+    } catch (err) {
+      await customAlert("Gagal", err instanceof Error ? err.message : "Gagal menyimpan.", "error");
+    } finally {
+      setRepairing(null);
+    }
   };
 
   return (
@@ -154,6 +202,36 @@ export default function Transfer() {
           <div className="bg-green-600 text-white px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 font-semibold text-sm">
             <CheckCircle2 className="w-5 h-5" />
             Transfer berhasil dicatat!
+          </div>
+        </div>
+      )}
+
+      {brokenTransfers.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-amber-900">{brokenTransfers.length} transfer belum lengkap</p>
+              <p className="text-sm text-amber-800 mt-0.5">Uang tercatat keluar, tapi tidak tercatat masuk ke kas tujuan. Akibatnya saldo kas tujuan terlalu kecil.</p>
+              <ul className="mt-3 space-y-2">
+                {brokenTransfers.map(t => (
+                  <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 bg-white rounded-xl border border-amber-200 px-3 py-2">
+                    <span className="text-sm text-gray-800">
+                      <b>Rp {t.nominal.toLocaleString("id-ID")}</b> · {getLocationName(t.kasLocationId ?? DEFAULT_KAS_LOCATION_ID)} → {getLocationName(t.transferToKasLocationId!)}
+                      <span className="text-gray-500"> · {new Date(t.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => repairTransfer(t)}
+                      disabled={repairing === t.transferId}
+                      className="px-3 py-1.5 rounded-lg text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60"
+                    >
+                      {repairing === t.transferId ? "Menyimpan..." : "Lengkapi"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       )}

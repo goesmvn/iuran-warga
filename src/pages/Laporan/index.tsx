@@ -18,6 +18,7 @@ import {
 import Papa from "papaparse";
 import { useConfirm } from "../../contexts/ConfirmContext";
 import { buildPaidMonthIndex, unpaidMonthsInYear } from "../../utils/iuran";
+import { LaporanWarga } from "../../components/LaporanWarga";
 
 export default function Laporan() {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransaksi();
@@ -407,6 +408,23 @@ export default function Laporan() {
     });
   }, [transactions, filterYearTahunan]);
 
+  // Kepatuhan iuran tahun laporan (aturan sama dengan Dashboard, Tunggakan & broadcast WA)
+  const kepatuhanIuran = useMemo(() => {
+    const paidIndex = buildPaidMonthIndex(transactions, categories);
+    const aktif = warga.filter(w => w.status === "Aktif");
+    const bulanJatuhTempo = unpaidMonthsInYear(new Set(), filterYearTahunan).length;
+    let belumBayar = 0;
+    let kkLunas = 0;
+    for (const w of aktif) {
+      const unpaid = unpaidMonthsInYear(paidIndex.get(w.id), filterYearTahunan).length;
+      belumBayar += unpaid;
+      if (unpaid === 0) kkLunas++;
+    }
+    const totalBulan = aktif.length * bulanJatuhTempo;
+    const persen = totalBulan > 0 ? Math.round(((totalBulan - belumBayar) / totalBulan) * 100) : 100;
+    return { persen, kkLunas, kkAktif: aktif.length, bulanJatuhTempo };
+  }, [transactions, categories, warga, filterYearTahunan]);
+
   const totalArusKas = useMemo(() => {
     return {
       masuk: arusKasData.reduce((s, d) => s + d.masuk, 0),
@@ -770,6 +788,22 @@ export default function Laporan() {
       </div>
 
       {/* TAHUNAN VIEW */}
+      {activeTab === "Tahunan" && (
+        <>
+          <LaporanWarga
+            year={filterYearTahunan}
+            namaOrganisasi={namaOrganisasi}
+            namaDesa={namaDesa}
+            namaBendahara={settings['nama_bendahara']}
+            saldoAwal={getSaldoAwal(filterYearTahunan)}
+            pemasukan={incomeCategories.map(c => ({ name: c.name, amount: getCategorySum(c.id, filterYearTahunan) }))}
+            pengeluaran={expenseCategories.map(c => ({ name: c.name, amount: getCategorySum(c.id, filterYearTahunan) }))}
+            bulanan={arusKasData}
+            kepatuhan={kepatuhanIuran}
+          />
+          <h3 className="font-bold text-gray-900 text-lg mb-3 print:hidden">Laporan Resmi (format pembukuan)</h3>
+        </>
+      )}
       {activeTab === "Tahunan" && (
         <div className="bg-white mx-auto border-2 border-gray-300 print:border-none print:shadow-none shadow-sm pb-8 mb-12">
           <div className="text-center py-6 border-b-2 border-gray-300 bg-gray-50/50 print:bg-transparent">

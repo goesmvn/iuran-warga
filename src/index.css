@@ -83,7 +83,7 @@
     transform: translate3d(var(--jk-enter-x, 0), var(--jk-enter-y, 0), 0) scale(var(--jk-enter-scale, 1));
   }
 }
-@utility animate-in { animation: jk-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@utility animate-in { animation: jk-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards; } /* backwards: setelah selesai transform dilepas, tidak menyisakan layer GPU (artefak gambar di WebView) */
 @utility fade-in { --jk-enter-opacity: 0; }
 @utility zoom-in-95 { --jk-enter-scale: 0.95; }
 @utility slide-in-from-top-2 { --jk-enter-y: -0.5rem; }

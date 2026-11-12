@@ -412,7 +412,7 @@ export default function Kas() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-gray-100 pb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 font-display">
-            Arus Kas & Buku Besar
+            Buku Kas
           </h2>
           <p className="text-gray-500 mt-1">
             Riwayat seluruh arus kas keluar dan masuk RT/RW.

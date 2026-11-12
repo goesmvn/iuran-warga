@@ -65,7 +65,6 @@ export default function DaftarIuran() {
               Peran anda sebagai pengelola
             </p>
           </div>
-          <div className="absolute -right-4 -top-8 w-32 h-32 bg-orange-50 rounded-full blur-2xl opacity-50"></div>
         </div>
 
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex items-center gap-6">

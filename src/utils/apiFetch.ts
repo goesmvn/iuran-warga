@@ -54,19 +54,30 @@ const handleUnauthorized = (response: Response, url: string) => {
   return response;
 };
 
-// GET data utama yang sama dan sedang berjalan dipakai bersama (mis. 4 komponen minta /api/settings sekaligus)
+// GET data utama yang sama dipakai bersama: yang sedang berjalan (mis. 4 komponen minta /api/settings sekaligus)
+// dan yang baru selesai < 2 detik lalu (komponen yang dimuat sedikit belakangan). Setiap perubahan data mengosongkannya.
 const inflightGets = new Map<string, Promise<Response>>();
+const recentGets = new Map<string, { at: number; response: Response }>();
+const RECENT_GET_MS = 2000;
 
 export const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
   const method = (options.method || 'GET').toUpperCase();
   if (method === 'GET' && isCacheable(url) && !options.signal) {
+    const recent = recentGets.get(url);
+    if (recent && Date.now() - recent.at < RECENT_GET_MS) return recent.response.clone();
     let shared = inflightGets.get(url);
     if (!shared) {
-      shared = fetchCacheable(url, options).finally(() => inflightGets.delete(url));
+      shared = fetchCacheable(url, options)
+        .then((response) => {
+          if (response.ok) recentGets.set(url, { at: Date.now(), response: response.clone() });
+          return response;
+        })
+        .finally(() => inflightGets.delete(url));
       inflightGets.set(url, shared);
     }
     return (await shared).clone();
   }
+  if (method !== 'GET') recentGets.clear(); // data berubah: jangan pakai hasil GET lama
   return fetchOther(url, method, options);
 };
 

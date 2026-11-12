@@ -28,19 +28,20 @@ const JepunIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// Dikelompokkan menurut seberapa sering dipakai pengurus
 const menuGroups = [
     {
         title: 'Utama',
         items: [
-            { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+            { icon: LayoutDashboard, label: 'Beranda', path: '/' },
             { icon: Receipt, label: 'Terima Pembayaran', path: '/pembayaran' },
+            { icon: Minus, label: 'Catat Pengeluaran', path: '/pengeluaran' },
         ]
     },
     {
         title: 'Keuangan',
         items: [
-            { icon: CreditCard, label: 'Arus Kas & Buku Besar', path: '/kas' },
-            { icon: Minus, label: 'Catat Pengeluaran/Lain', path: '/pengeluaran' },
+            { icon: CreditCard, label: 'Buku Kas', path: '/kas' },
             { icon: ArrowRightLeft, label: 'Transfer Antar Kas', path: '/transfer' },
             { icon: PieChart, label: 'Laporan Keuangan', path: '/laporan' },
         ]
@@ -173,7 +174,6 @@ export function Sidebar({ mobileOpen, setMobileOpen, collapsed, setCollapsed }: 
                     {!collapsed ? (
                         <div className="flex flex-col gap-2">
                             <div className="bg-brand-50 rounded-xl p-3 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 -mt-2 -mr-2 w-12 h-12 bg-brand-100 rounded-full blur-xl opacity-50"></div>
                                 <h4 className="font-semibold text-brand-900 text-xs mb-0.5 truncate">{user?.name || 'Administrator'}</h4>
                                 <p className="text-[10px] text-brand-600 font-bold">{user?.role || 'Akses Sistem'}</p>
                             </div>
