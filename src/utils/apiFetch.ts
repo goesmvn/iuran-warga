@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import {
   applyToCache, enqueue, fetchWithTimeout, flushQueue, getSyncStatus,
-  isCacheable, isQueueable, isServerReachable, markReachable, probeServer, readCache, startAutoSync, writeCache,
+  isCacheable, isGatewayError, isQueueable, isServerReachable, markReachable, probeServer, readCache, startAutoSync, writeCache,
   type QueuedRequest,
 } from './offlineSync';
 
@@ -35,7 +35,7 @@ const authorizedFetch = (url: string, options: RequestInit = {}) => {
   }
 
   return fetch(apiUrl(url), { ...options, headers }).then(
-    (res) => { markReachable(true); return res; },
+    (res) => { markReachable(!isGatewayError(res.status)); return res; },
     (err) => { markReachable(false); throw err; },
   );
 };
@@ -69,6 +69,11 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
     await flushQueue();
     try {
       const response = await fetchWithTimeout(authorizedFetch, url, options);
+      if (isGatewayError(response.status)) {
+        // Proxy hidup tapi server mati: pakai data di HP
+        const cached = readCache(url);
+        if (cached !== null) return jsonResponse(cached);
+      }
       if (response.ok && getSyncStatus().pending === 0) {
         writeCache(url, await response.clone().json());
       }
@@ -106,6 +111,11 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
 
     try {
       const response = await fetchWithTimeout(authorizedFetch, url, options);
+      if (isGatewayError(response.status)) {
+        // Server sedang mati/restart di balik proxy: simpan ke antrean, jangan dianggap gagal
+        enqueue(queueMethod, url, body);
+        return jsonResponse({ success: true, queued: true }, 202);
+      }
       if (response.ok) applyToCache(method, url, body);
       return handleUnauthorized(response, url);
     } catch {

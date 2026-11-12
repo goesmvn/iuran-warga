@@ -95,13 +95,19 @@ function notify() {
 
 export const isServerReachable = () => serverReachable;
 
+/**
+ * 502/503/504 = reverse proxy (Caddy) hidup tapi aplikasi server mati/sedang restart (mis. saat deploy).
+ * Diperlakukan sama dengan offline: data diantrekan, bukan dianggap gagal.
+ */
+export const isGatewayError = (status: number) => status === 502 || status === 503 || status === 504;
+
 let lastProbe = 0;
 /** Cek ringan apakah server bisa dihubungi lagi (maks. sekali per 10 detik), lalu kirim antrean. */
 export function probeServer() {
   if (!rawFetch || !navigator.onLine || Date.now() - lastProbe < 10_000) return;
   lastProbe = Date.now();
   fetchWithTimeout(rawFetch, '/api/ping', {})
-    .then(() => flushQueue())
+    .then((res) => { if (res.ok) flushQueue(); })
     .catch(() => { /* masih tak terjangkau; status sudah ditandai oleh rawFetch */ });
 }
 
@@ -214,6 +220,9 @@ export function flushQueue(): Promise<void> {
       } else if (res.status === 401) {
         authExpired = true; // perlu login ulang; antrean tetap disimpan
         break;
+      } else if (isGatewayError(res.status)) {
+        markReachable(false);
+        break; // server sedang tidak tersedia; data aman di antrean
       } else if (res.status === 429) {
         break; // server sedang membatasi permintaan; data aman di antrean, coba lagi nanti
       } else if (res.status >= 500 && item.attempts + 1 < MAX_SERVER_ERROR_ATTEMPTS) {
