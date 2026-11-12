@@ -100,3 +100,9 @@
 @media print {
   body:has(> .print-root) > #root { display: none !important; }
 }
+
+/* Deretan yang bisa digeser tanpa scrollbar (kartu laporan di HP, menu) */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

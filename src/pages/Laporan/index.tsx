@@ -1,5 +1,5 @@
 import { todayLocal } from "../../utils/date";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
@@ -14,7 +14,12 @@ import {
   ArrowDownUp,
   Landmark,
   Search,
-  Share2
+  Share2,
+  BookOpen,
+  CalendarDays,
+  CalendarRange,
+  TrendingUp,
+  Grid3x3
 } from "lucide-react";
 import { isNativeApp } from "../../utils/apiFetch";
 import { safeFileName, shareElementAsImage, shareTextFile } from "../../utils/shareImage";
@@ -22,6 +27,15 @@ import Papa from "papaparse";
 import { useConfirm } from "../../contexts/ConfirmContext";
 import { buildPaidMonthIndex, unpaidMonthsInYear } from "../../utils/iuran";
 import { LaporanWarga } from "../../components/LaporanWarga";
+
+const REPORT_TABS = [
+  { id: "Tahunan", label: "Tahunan", desc: "Ringkasan setahun untuk warga & pembukuan", icon: BookOpen },
+  { id: "Bulanan", label: "Bulanan", desc: "Uang masuk & keluar dalam satu bulan", icon: CalendarDays },
+  { id: "Pertanggal", label: "Rentang Tanggal", desc: "Transaksi pada tanggal yang dipilih", icon: CalendarRange },
+  { id: "ArusKas", label: "Arus Kas", desc: "Saldo kas dari bulan ke bulan", icon: TrendingUp },
+  { id: "Rekapitulasi", label: "Rekap Iuran", desc: "Siapa sudah bayar bulan apa", icon: Grid3x3 },
+  { id: "Tunggakan", label: "Tunggakan", desc: "Warga yang belum bayar", icon: AlertTriangle },
+] as const;
 
 export default function Laporan() {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransaksi();
@@ -35,6 +49,7 @@ export default function Laporan() {
   // Orientasi kertas: default per tab (Rekap Warga 12 kolom bulan -> mendatar), bisa diganti pengguna
   const [orientationByTab, setOrientationByTab] = useState<Record<string, 'portrait' | 'landscape'>>({});
   const reportRef = useRef<HTMLDivElement>(null);
+  const tabListRef = useRef<HTMLDivElement>(null);
   const [sharingReport, setSharingReport] = useState(false);
 
   const namaKetua = settings['nama_ketua'] || '.........................';
@@ -44,6 +59,10 @@ export default function Laporan() {
   const alamatOrg = settings['alamat'] || '';
 
   const [activeTab, setActiveTab] = useState<"Bulanan" | "Tunggakan" | "Rekapitulasi" | "Tahunan" | "ArusKas" | "Pertanggal">("Tahunan");
+  // Di HP deretan kartu bisa digeser: pastikan kartu laporan yang aktif selalu terlihat
+  useEffect(() => {
+    tabListRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [activeTab]);
 
   // Filter States
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
@@ -546,7 +565,7 @@ export default function Laporan() {
   const orientation = orientationByTab[activeTab] ?? (activeTab === 'Rekapitulasi' ? 'landscape' : 'portrait');
   const tabTitles: Record<string, string> = {
     Tahunan: tahunanView === 'warga' ? 'Laporan untuk Warga' : 'Laporan Keuangan Tahunan',
-    Bulanan: 'Laporan Bulanan', Pertanggal: 'Laporan Per Tanggal', ArusKas: 'Laporan Arus Kas',
+    Bulanan: 'Laporan Bulanan', Pertanggal: 'Laporan Rentang Tanggal', ArusKas: 'Laporan Arus Kas',
     Rekapitulasi: 'Rekap Iuran Warga', Tunggakan: 'Daftar Tunggakan',
   };
 
@@ -585,36 +604,36 @@ export default function Laporan() {
 
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto print:max-w-none print:w-full print:m-0">
-      <div className="print:hidden flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">
-            Laporan Keuangan
-          </h2>
-          <p className="text-gray-500 text-sm mt-1">
-            Analisa dan Rekapitulasi Pembukuan Kas Warga.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-1.5 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
-          {([
-            { id: "Tahunan", label: "Tahunan", active: "bg-brand-600 text-white shadow border border-brand-700" },
-            { id: "Bulanan", label: "Bulanan", active: "bg-white text-gray-900 shadow border border-gray-200" },
-            { id: "Pertanggal", label: "Pertanggal", active: "bg-white text-emerald-700 shadow border border-emerald-200" },
-            { id: "ArusKas", label: "Arus Kas", active: "bg-white text-gray-900 shadow border border-gray-200" },
-            { id: "Rekapitulasi", label: "Rekap Warga", active: "bg-white text-blue-700 shadow border border-blue-200" },
-            { id: "Tunggakan", label: "Tunggakan", active: "bg-white text-brand-700 shadow border border-brand-200" },
-          ] as const).map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setSearchQuery("");
-              }}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === tab.id ? tab.active : "text-gray-500 hover:text-gray-700"
+      {/* Pilihan jenis laporan: kartu dengan penjelasan singkat (HP: geser ke samping) */}
+      <div className="print:hidden mb-5">
+        <p className="text-sm text-gray-500 mb-3">Pilih laporan yang ingin dilihat:</p>
+        <div ref={tabListRef} className="-mx-4 px-4 sm:mx-0 sm:px-0 flex sm:grid sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5 overflow-x-auto sm:overflow-visible snap-x pb-1 no-scrollbar" role="tablist">
+          {REPORT_TABS.map(tab => {
+            const active = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setSearchQuery("");
+                }}
+                className={`snap-start shrink-0 w-32 sm:w-auto text-left rounded-2xl border-2 p-2.5 sm:p-3 transition-all ${
+                  active
+                    ? "border-brand-500 bg-brand-50 shadow-sm"
+                    : "border-gray-100 bg-white hover:border-brand-200"
                 }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+              >
+                <span className={`inline-flex p-1.5 sm:p-2 rounded-xl mb-1.5 sm:mb-2 ${active ? "bg-brand-500 text-white" : "bg-gray-100 text-gray-600"}`}>
+                  <Icon className="w-4 h-4" />
+                </span>
+                <span className={`block text-sm font-bold ${active ? "text-brand-800" : "text-gray-900"}`}>{tab.label}</span>
+                <span className="block text-[11px] sm:text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{tab.desc}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -777,10 +796,10 @@ export default function Laporan() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto [&>button]:justify-center">
           {canPrint && !isNativeApp && (
             <>
-              <div className="flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-bold" role="group" aria-label="Arah kertas">
+              <div className="col-span-2 sm:col-span-1 flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-bold [&>button]:flex-1" role="group" aria-label="Arah kertas">
                 {([['portrait', 'Tegak'], ['landscape', 'Mendatar']] as const).map(([value, label]) => (
                   <button
                     key={value}
@@ -798,7 +817,7 @@ export default function Laporan() {
                 onClick={() => handlePrintPage(orientation)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors"
               >
-                <Printer className="w-4 h-4" /> Cetak / Simpan PDF
+                <Printer className="w-4 h-4" /> <span className="sm:hidden">Cetak / PDF</span><span className="hidden sm:inline">Cetak / Simpan PDF</span>
               </button>
             </>
           )}
@@ -815,7 +834,7 @@ export default function Laporan() {
           {(activeTab === "Bulanan" || activeTab === "Tunggakan" || activeTab === "Pertanggal") && (
             <button
               onClick={exportCSV}
-              className="flex items-center gap-2 text-green-700 bg-green-50 hover:bg-green-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors border border-green-200"
+              className="col-span-2 sm:col-span-1 flex items-center gap-2 text-green-700 bg-green-50 hover:bg-green-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors border border-green-200"
             >
               <FileSpreadsheet className="w-4 h-4" /> {isNativeApp ? 'Bagikan Excel (CSV)' : 'Unduh Excel (CSV)'}
             </button>
@@ -1556,7 +1575,7 @@ export default function Laporan() {
             subtitle={`${new Date(2000, filterMonth - 1).toLocaleString('id-ID', { month: 'long' })} ${filterYear}`}
           />
           <div className="bg-white rounded-2xl print:rounded-none shadow-sm print:shadow-none border border-orange-200 print:border-gray-300 overflow-hidden">
-            <div className="px-6 py-4 border-b border-orange-100 bg-orange-50/50 print:bg-transparent flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-4 border-b border-orange-100 bg-orange-50/50 print:bg-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <div className="flex items-center gap-2 text-orange-800 print:text-gray-800">
                 <AlertTriangle className="w-5 h-5 text-orange-500 print:hidden" />
                 <h3 className="font-semibold">
