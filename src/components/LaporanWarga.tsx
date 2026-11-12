@@ -1,7 +1,4 @@
-import { useRef, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, Printer, Share2, Wallet, PiggyBank } from "lucide-react";
-import { safeFileName, shareElementAsImage } from "../utils/shareImage";
-import { isNativeApp } from "../utils/apiFetch";
+import { ArrowDownCircle, ArrowUpCircle, Wallet, PiggyBank } from "lucide-react";
 
 export interface LaporanWargaProps {
   year: number;
@@ -50,55 +47,20 @@ function Bars({ rows, tone }: { rows: { name: string; amount: number }[]; tone: 
  */
 export function LaporanWarga(props: LaporanWargaProps) {
   const { year, namaOrganisasi, namaDesa, namaBendahara, saldoAwal, pemasukan, pengeluaran, bulanan, kepatuhan } = props;
-  const ref = useRef<HTMLDivElement>(null);
-  const [sharing, setSharing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const totalMasuk = pemasukan.reduce((s, r) => s + r.amount, 0);
   const totalKeluar = pengeluaran.reduce((s, r) => s + r.amount, 0);
   const saldoAkhir = saldoAwal + totalMasuk - totalKeluar;
   const selisih = saldoAkhir - saldoAwal;
 
-  const share = async () => {
-    if (!ref.current) return;
-    setSharing(true);
-    setError(null);
-    try {
-      await shareElementAsImage(ref.current, safeFileName("Laporan-Kas", namaOrganisasi, String(year)), `Laporan keuangan ${namaOrganisasi} tahun ${year}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal membagikan laporan.");
-    } finally {
-      setSharing(false);
-    }
-  };
-
   return (
-    <section className="mb-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 print:hidden">
-        <div>
-          <h3 className="font-bold text-gray-900 text-lg">Laporan untuk Warga</h3>
-          <p className="text-sm text-gray-500">Ringkasan sederhana, siap dibagikan ke grup warga.</p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={share} disabled={sharing} className="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 flex items-center gap-2">
-            <Share2 className="w-4 h-4" /> {sharing ? "Menyiapkan..." : "Bagikan"}
-          </button>
-          {!isNativeApp && (
-            <button type="button" onClick={() => window.print()} className="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 flex items-center gap-2">
-              <Printer className="w-4 h-4" /> Cetak
-            </button>
-          )}
-        </div>
-      </div>
-      {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
-
-      <div ref={ref} className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-8 max-w-3xl mx-auto text-gray-900">
-        <header className="text-center">
+    <section className="mb-8 print:mb-0">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-8 max-w-3xl mx-auto text-gray-900">
+        <div className="text-center">{/* bukan <header>: aturan cetak global menyembunyikan semua <header> */}
           <p className="text-xs font-bold uppercase tracking-widest text-brand-600">Laporan Keuangan Tahun {year}</p>
           <h2 className="text-xl sm:text-2xl font-bold mt-1">{namaOrganisasi}</h2>
           {namaDesa && <p className="text-sm text-gray-500">{namaDesa}</p>}
           <p className="text-sm text-gray-600 mt-3">1 Januari – 31 Desember {year}</p>
-        </header>
+        </div>
 
         {/* Empat angka utama */}
         <div className="mt-6 grid grid-cols-2 gap-3">

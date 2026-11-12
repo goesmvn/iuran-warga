@@ -13,7 +13,7 @@ interface BluetoothPrintButtonProps {
  * Tombol cetak ke printer thermal Bluetooth (khusus aplikasi Android).
  * Saat pertama dipakai, pengguna memilih printer yang sudah di-pair & lebar kertas; pilihan diingat.
  */
-export function BluetoothPrintButton({ build, label = "Cetak Struk", className = "" }: BluetoothPrintButtonProps) {
+export function BluetoothPrintButton({ build, label = "Cetak ke Printer Bluetooth", className = "" }: BluetoothPrintButtonProps) {
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig | null>(getPrinterConfig);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [devices, setDevices] = useState<PrinterDevice[]>([]);

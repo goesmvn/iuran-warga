@@ -1,5 +1,5 @@
 import { todayLocal } from "../../utils/date";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
@@ -13,8 +13,11 @@ import {
   Printer,
   ArrowDownUp,
   Landmark,
-  Search
+  Search,
+  Share2
 } from "lucide-react";
+import { isNativeApp } from "../../utils/apiFetch";
+import { safeFileName, shareElementAsImage, shareTextFile } from "../../utils/shareImage";
 import Papa from "papaparse";
 import { useConfirm } from "../../contexts/ConfirmContext";
 import { buildPaidMonthIndex, unpaidMonthsInYear } from "../../utils/iuran";
@@ -27,6 +30,12 @@ export default function Laporan() {
   const { settings } = useSettings();
   const { locations: kasLocations } = useKasLocation();
   const { confirm, alert: customAlert } = useConfirm();
+  // Tab Tahunan: satu versi saja yang tampil/dicetak/dibagikan agar tidak membingungkan
+  const [tahunanView, setTahunanView] = useState<'warga' | 'resmi'>('warga');
+  // Orientasi kertas: default per tab (Rekap Warga 12 kolom bulan -> mendatar), bisa diganti pengguna
+  const [orientationByTab, setOrientationByTab] = useState<Record<string, 'portrait' | 'landscape'>>({});
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [sharingReport, setSharingReport] = useState(false);
 
   const namaKetua = settings['nama_ketua'] || '.........................';
   const namaBendahara = settings['nama_bendahara'] || '.........................';
@@ -500,14 +509,8 @@ export default function Laporan() {
   };
 
   const downloadBlob = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    shareTextFile(filename, '\uFEFF' + content, 'text/csv;charset=utf-8', `Data ${filename.replace(/_/g, ' ').replace('.csv', '')}`)
+      .catch(err => customAlert('Gagal', err instanceof Error ? err.message : 'Gagal menyimpan file.', 'error'));
   };
 
   // Print header for all printable tabs
@@ -539,6 +542,26 @@ export default function Laporan() {
   );
 
   const canPrint = activeTab === "Tahunan" || activeTab === "ArusKas" || activeTab === "Bulanan" || activeTab === "Rekapitulasi" || activeTab === "Tunggakan" || activeTab === "Pertanggal";
+
+  const orientation = orientationByTab[activeTab] ?? (activeTab === 'Rekapitulasi' ? 'landscape' : 'portrait');
+  const tabTitles: Record<string, string> = {
+    Tahunan: tahunanView === 'warga' ? 'Laporan untuk Warga' : 'Laporan Keuangan Tahunan',
+    Bulanan: 'Laporan Bulanan', Pertanggal: 'Laporan Per Tanggal', ArusKas: 'Laporan Arus Kas',
+    Rekapitulasi: 'Rekap Iuran Warga', Tunggakan: 'Daftar Tunggakan',
+  };
+
+  const handleShareReport = async () => {
+    if (!reportRef.current) return;
+    setSharingReport(true);
+    try {
+      const title = `${tabTitles[activeTab] || 'Laporan'} ${namaOrganisasi}`;
+      await shareElementAsImage(reportRef.current, safeFileName(tabTitles[activeTab] || 'Laporan', namaOrganisasi, todayLocal()), title);
+    } catch (err) {
+      await customAlert('Gagal Membagikan', err instanceof Error ? err.message : 'Terjadi kesalahan.', 'error');
+    } finally {
+      setSharingReport(false);
+    }
+  };
 
   const handlePrintPage = (orientation?: 'portrait' | 'landscape') => {
     const styleId = 'dynamic-print-orientation';
@@ -755,40 +778,72 @@ export default function Laporan() {
         )}
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {canPrint && !isNativeApp && (
+            <>
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-bold" role="group" aria-label="Arah kertas">
+                {([['portrait', 'Tegak'], ['landscape', 'Mendatar']] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setOrientationByTab(prev => ({ ...prev, [activeTab]: value }))}
+                    className={`px-3 py-1.5 rounded-md transition-colors ${orientation === value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                    title={value === 'portrait' ? 'Kertas A4 tegak' : 'Kertas A4 mendatar (untuk tabel lebar)'}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => handlePrintPage(orientation)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors"
+              >
+                <Printer className="w-4 h-4" /> Cetak / Simpan PDF
+              </button>
+            </>
+          )}
+          {canPrint && (
+            <button
+              type="button"
+              onClick={handleShareReport}
+              disabled={sharingReport}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors"
+            >
+              <Share2 className="w-4 h-4" /> {sharingReport ? 'Menyiapkan...' : 'Bagikan'}
+            </button>
+          )}
           {(activeTab === "Bulanan" || activeTab === "Tunggakan" || activeTab === "Pertanggal") && (
             <button
               onClick={exportCSV}
               className="flex items-center gap-2 text-green-700 bg-green-50 hover:bg-green-100 px-4 py-2 rounded-lg text-sm font-semibold transition-colors border border-green-200"
             >
-              <FileSpreadsheet className="w-4 h-4" /> Export CSV
+              <FileSpreadsheet className="w-4 h-4" /> {isNativeApp ? 'Bagikan Excel (CSV)' : 'Unduh Excel (CSV)'}
             </button>
-          )}
-          {canPrint && (
-            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
-              <button
-                type="button"
-                onClick={() => handlePrintPage('portrait')}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Cetak format Tegak (Portrait)"
-              >
-                <Printer className="w-3.5 h-3.5 text-gray-500" /> Cetak Portrait
-              </button>
-              <div className="w-px h-4 bg-gray-200"></div>
-              <button
-                type="button"
-                onClick={() => handlePrintPage('landscape')}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-lg transition-colors"
-                title="Cetak format Mendatar (Landscape)"
-              >
-                <Printer className="w-3.5 h-3.5 text-brand-600" /> Cetak Landscape
-              </button>
-            </div>
           )}
         </div>
       </div>
 
-      {/* TAHUNAN VIEW */}
+      {/* Area laporan yang dicetak / dibagikan sebagai gambar */}
+      <div ref={reportRef} className="bg-gray-50/50 print:bg-transparent">
+      {/* TAHUNAN VIEW */}      {/* TAHUNAN VIEW */}
       {activeTab === "Tahunan" && (
+        <div className="print:hidden mb-4 flex flex-wrap items-center gap-2" data-share-ignore>
+          <span className="text-sm font-medium text-gray-600">Tampilan:</span>
+          <div className="flex bg-gray-100 rounded-xl p-1 text-sm font-bold">
+            {([['warga', 'Versi Warga (sederhana)'], ['resmi', 'Versi Resmi (pembukuan)']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTahunanView(value)}
+                className={`px-3 py-1.5 rounded-lg transition-colors ${tahunanView === value ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {activeTab === "Tahunan" && tahunanView === 'warga' && (
         <>
           <LaporanWarga
             year={filterYearTahunan}
@@ -801,10 +856,9 @@ export default function Laporan() {
             bulanan={arusKasData}
             kepatuhan={kepatuhanIuran}
           />
-          <h3 className="font-bold text-gray-900 text-lg mb-3 print:hidden">Laporan Resmi (format pembukuan)</h3>
         </>
       )}
-      {activeTab === "Tahunan" && (
+      {activeTab === "Tahunan" && tahunanView === 'resmi' && (
         <div className="bg-white mx-auto border-2 border-gray-300 print:border-none print:shadow-none shadow-sm pb-8 mb-12">
           <div className="text-center py-6 border-b-2 border-gray-300 bg-gray-50/50 print:bg-transparent">
             <h2 className="font-extrabold text-xl uppercase tracking-wider text-gray-900">Laporan Keuangan</h2>
@@ -1653,6 +1707,8 @@ export default function Laporan() {
           <PrintFooter />
         </div>
       )}
+
+      </div>
 
       {/* Modal Koreksi Pembayaran Warga */}
       {correctionResident && activeCorrectionResident && (

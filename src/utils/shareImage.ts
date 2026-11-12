@@ -1,6 +1,6 @@
 import { toPng } from 'html-to-image';
 import { Capacitor } from '@capacitor/core';
-import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
 /**
@@ -9,7 +9,13 @@ import { Share } from '@capacitor/share';
  */
 export async function shareElementAsImage(element: HTMLElement, fileName: string, text: string) {
   // skipFonts: jangan unduh web font saat render, agar tetap jalan saat offline
-  const dataUrl = await toPng(element, { pixelRatio: 2, backgroundColor: '#ffffff', skipFonts: true });
+  // Elemen bertanda data-share-ignore (mis. tombol pilihan tampilan) tidak ikut masuk ke gambar
+  const dataUrl = await toPng(element, {
+    pixelRatio: 2,
+    backgroundColor: '#ffffff',
+    skipFonts: true,
+    filter: (node) => !(node instanceof HTMLElement && node.dataset.shareIgnore !== undefined),
+  });
 
   if (Capacitor.isNativePlatform()) {
     const file = await Filesystem.writeFile({
@@ -48,3 +54,28 @@ export async function shareElementAsImage(element: HTMLElement, fileName: string
 /** Nama file aman: huruf/angka saja. */
 export const safeFileName = (...parts: string[]) =>
   parts.join('_').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/-+/g, '-').slice(0, 80) + '.png';
+
+/**
+ * Simpan / bagikan file teks (mis. CSV untuk Excel). Di Android unduhan biasa diblokir WebView,
+ * jadi file dibagikan lewat menu Share (WhatsApp, Drive, email, dsb). Di browser: unduh biasa.
+ */
+export async function shareTextFile(fileName: string, content: string, mimeType: string, title: string) {
+  if (Capacitor.isNativePlatform()) {
+    const file = await Filesystem.writeFile({ path: fileName, data: content, directory: Directory.Cache, encoding: Encoding.UTF8 });
+    try {
+      await Share.share({ title, text: title, files: [file.uri], dialogTitle: title });
+    } catch (err) {
+      if (err instanceof Error && /cancel/i.test(err.message)) return;
+      throw err;
+    }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

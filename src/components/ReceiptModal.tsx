@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useRef, useState } from "react";
 import { Printer, X, Share2 } from "lucide-react";
 import { JepunIcon } from "./JepunIcon";
@@ -54,8 +55,8 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
     }
   };
 
-  return (
-    <>
+  return createPortal(
+    <div className="print-root">
       <style type="text/css" media="print">
         {`
           @page { margin: 0; }
@@ -93,7 +94,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
 
         {/* Scrollable Receipt Area */}
         <div className="flex-1 overflow-y-auto print:overflow-visible">
-          <div ref={receiptRef} className="p-6 sm:p-8 print:p-0 bg-white text-gray-900 font-mono text-[13px] print:text-[11px] leading-relaxed">
+          <div ref={receiptRef} className="p-6 sm:p-8 print:p-0 print:max-w-[80mm] print:mx-auto print:pt-4 bg-white text-gray-900 font-mono text-[13px] print:text-[11px] leading-relaxed">
             
             {/* Header Struk */}
             <div className="text-center mb-6">
@@ -183,6 +184,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
         </div>
       </div>
     </div>
-    </>
+    </div>,
+    document.body
   );
 }

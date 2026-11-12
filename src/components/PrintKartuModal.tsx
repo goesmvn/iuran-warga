@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useState, useMemo, useRef } from "react";
 import { X, Printer, Check, Share2 } from "lucide-react";
 import { useTransaksi } from "../hooks/useTransaksi";
@@ -115,8 +116,8 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
   ];
 
-  return (
-    <>
+  return createPortal(
+    <div className="print-root">
       {isThermal && (
         <style type="text/css" media="print">
           {`
@@ -292,20 +293,21 @@ export function PrintKartuModal({ isOpen, onClose, warga }: PrintKartuModalProps
              </button>
              {isNativeApp ? (
                <div className="w-full sm:w-64">
-                 <BluetoothPrintButton build={buildThermalKartu} label="Cetak Thermal BT" />
+                 <BluetoothPrintButton build={buildThermalKartu} label="Cetak ke Printer Bluetooth" />
                </div>
              ) : (<>
              <button onClick={handlePrintThermal} className="px-6 py-2.5 rounded-xl font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 shadow-sm flex items-center gap-2 transition-transform active:scale-95">
-                 <Printer className="w-4 h-4" /> Cetak Thermal BT
+                 <Printer className="w-4 h-4" /> Cetak Kertas Struk
              </button>
              <button onClick={handlePrintA4} className="px-6 py-2.5 rounded-xl font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-500/20 flex items-center gap-2 transition-transform active:scale-95">
-                 <Printer className="w-4 h-4" /> Cetak A4 Standard
+                 <Printer className="w-4 h-4" /> Cetak Kertas A4
              </button>
              </>)}
          </div>
 
       </div>
     </div>
-    </>
+    </div>,
+    document.body
   );
 }
