@@ -54,11 +54,26 @@ const handleUnauthorized = (response: Response, url: string) => {
   return response;
 };
 
-export const apiFetch = async (url: string, options: RequestInit = {}) => {
+// GET data utama yang sama dan sedang berjalan dipakai bersama (mis. 4 komponen minta /api/settings sekaligus)
+const inflightGets = new Map<string, Promise<Response>>();
+
+export const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
   const method = (options.method || 'GET').toUpperCase();
+  if (method === 'GET' && isCacheable(url) && !options.signal) {
+    let shared = inflightGets.get(url);
+    if (!shared) {
+      shared = fetchCacheable(url, options).finally(() => inflightGets.delete(url));
+      inflightGets.set(url, shared);
+    }
+    return (await shared).clone();
+  }
+  return fetchOther(url, method, options);
+};
+
+async function fetchCacheable(url: string, options: RequestInit): Promise<Response> {
 
   // Baca data: server dulu, cache jika offline
-  if (method === 'GET' && isCacheable(url)) {
+  {
     // Server diketahui tak terjangkau: tampilkan data di HP seketika, coba sync di latar belakang
     const cachedNow = readCache(url);
     if ((!navigator.onLine || !isServerReachable()) && cachedNow !== null) {
@@ -90,6 +105,9 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
     }
   }
 
+}
+
+async function fetchOther(url: string, method: string, options: RequestInit): Promise<Response> {
   // Ubah data: langsung ke server jika bisa, masuk antrean jika offline
   if (method !== 'GET' && isQueueable(url)) {
     const body = typeof options.body === 'string' ? options.body : undefined;
@@ -127,4 +145,4 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
 
   const response = await authorizedFetch(url, options);
   return handleUnauthorized(response, url);
-};
+}

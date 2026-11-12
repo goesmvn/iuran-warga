@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 
 interface ConfirmOptions {
@@ -161,24 +160,18 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   return (
     <ConfirmContext.Provider value={{ confirm, alert }}>
       {children}
-      <AnimatePresence>
-        {isOpen && (
+      {isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+            <div
               onClick={() => handleClose(false)}
-              className="absolute inset-0 bg-gray-950/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-gray-950/60 backdrop-blur-sm animate-in fade-in"
             />
             {/* Modal Box */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ type: 'spring', duration: 0.4 }}
-              className="bg-white rounded-3xl w-full max-w-lg shadow-2xl relative z-10 overflow-hidden border border-gray-100"
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              className="bg-white rounded-3xl w-full max-w-lg shadow-2xl relative z-10 overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 slide-in-from-bottom-2"
             >
               <button
                 type="button"
@@ -229,10 +222,9 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
     </ConfirmContext.Provider>
   );
 }

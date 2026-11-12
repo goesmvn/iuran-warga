@@ -33,6 +33,21 @@ export default defineConfig({
     tailwindcss(),
     backendPlugin(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Library besar dipisah agar tetap ter-cache di HP saat kode aplikasi diperbarui
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/node_modules\/(react|react-dom|scheduler|react-router|react-router-dom)\//.test(id)) return 'react';
+          if (id.includes('node_modules/framer-motion') || id.includes('node_modules/motion-')) return 'motion';
+          if (id.includes('node_modules/lucide-react')) return 'icons';
+          if (id.includes('node_modules/@capacitor')) return 'capacitor';
+          return undefined;
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': {

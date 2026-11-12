@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
 import type { KasLocation } from '../types';
 import { apiFetch } from '../utils/apiFetch';
+import { cachedData } from '../utils/offlineSync';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 export const DEFAULT_KAS_LOCATION_ID = 'loc-default'; // Matched with DB seed id
 
 export function useKasLocation() {
-    const [locations, setLocations] = useState<KasLocation[]>([]);
+    const [locations, setLocations] = useState<KasLocation[]>(() => cachedData<KasLocation[]>('/api/kas-locations', [])); // tampil instan dari data terakhir di HP
     const { alert: customAlert } = useConfirm();
 
     useEffect(() => {
         apiFetch('/api/kas-locations')
             .then(res => res.json())
-            .then(data => setLocations(data))
+            .then(data => { if (Array.isArray(data)) setLocations(data); })
             .catch(err => console.error("Failed to fetch kas locations:", err));
     }, []);
 

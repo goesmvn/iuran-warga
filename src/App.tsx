@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import { BottomNav } from './components/BottomNav';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import React from 'react';
 
@@ -28,19 +29,26 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
-// Pages
-import Dashboard from './pages/Dashboard';
-import Warga from './pages/Warga';
-import Kas from './pages/Kas';
-import Pengeluaran from './pages/Pengeluaran';
-import Kategori from './pages/Kategori';
-import BuatIuranWizard from './pages/Kategori/BuatIuranWizard';
-import Laporan from './pages/Laporan';
+// Pages — dimuat saat dibuka (code splitting) agar aplikasi cepat terbuka, terutama di HP
 import Login from './pages/Auth/Login';
-import Pengelola from './pages/Pengelola';
-import Pembayaran from './pages/Pembayaran';
-import LokasiKas from './pages/LokasiKas';
-import Transfer from './pages/Transfer';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Warga = lazy(() => import('./pages/Warga'));
+const Kas = lazy(() => import('./pages/Kas'));
+const Pengeluaran = lazy(() => import('./pages/Pengeluaran'));
+const Kategori = lazy(() => import('./pages/Kategori'));
+const BuatIuranWizard = lazy(() => import('./pages/Kategori/BuatIuranWizard'));
+const Laporan = lazy(() => import('./pages/Laporan'));
+const Pengelola = lazy(() => import('./pages/Pengelola'));
+const Pembayaran = lazy(() => import('./pages/Pembayaran'));
+const LokasiKas = lazy(() => import('./pages/LokasiKas'));
+const Transfer = lazy(() => import('./pages/Transfer'));
+
+const PageLoading = () => (
+  <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+    <div className="w-8 h-8 rounded-full border-4 border-brand-100 border-t-brand-500 animate-spin" />
+    <span className="sr-only">Memuat halaman...</span>
+  </div>
+);
 import { ConfirmProvider } from './contexts/ConfirmContext';
 
 // Protected Route Wrapper
@@ -66,10 +74,12 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
       <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out print:pl-0 print:block print:min-h-0 ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
         <Header setMobileOpen={setMobileOpen} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto print:p-0 print:m-0 print:overflow-visible h-[calc(100vh-4rem)]">
-          <div className="max-w-7xl mx-auto print:max-w-none print:w-full print:m-0 pb-12">
+          {/* pb ekstra di HP agar konten tidak tertutup navigasi bawah */}
+          <div className="max-w-7xl mx-auto print:max-w-none print:w-full print:m-0 pb-28 lg:pb-12">
             {children}
           </div>
         </main>
+        <BottomNav />
       </div>
     </div>
   );
@@ -77,6 +87,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
 
 function AppRoutes() {
   return (
+    <Suspense fallback={<PageLoading />}>
     <Routes>
       <Route path="/" element={<Dashboard />} />
       <Route path="/warga" element={<Warga />} />
@@ -90,6 +101,7 @@ function AppRoutes() {
       <Route path="/lokasi-kas" element={<LokasiKas />} />
       <Route path="/transfer" element={<Transfer />} />
     </Routes>
+    </Suspense>
   );
 }
 

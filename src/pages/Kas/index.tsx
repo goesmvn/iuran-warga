@@ -311,6 +311,9 @@ export default function Kas() {
 
   // Filtered & Sorted Transactions (Buku Besar)
   // Hanya menampilkan transaksi dengan nominal > 0 (koreksi rekap Rp 0 hanya ada di Laporan Rekap, tidak masuk Buku Besar)
+  // Tampilkan bertahap: ribuan baris sekaligus membuat HP berat & scroll tanpa ujung
+  const PAGE_SIZE = 30;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const processedTransactions = useMemo(() => {
     let result = transactions.filter(t => t.nominal > 0 && (!t.status || t.status === 'Success'));
 
@@ -499,7 +502,7 @@ export default function Kas() {
         </div>
         {/* Mobile View (Card List) */}
         <div className="md:hidden divide-y divide-gray-150">
-          {processedTransactions.map((tx) => {
+          {processedTransactions.slice(0, visibleCount).map((tx) => {
             const isPemasukan = tx.type === "Pemasukan";
             return (
               <div key={tx.id} className="p-4 flex flex-col gap-2">
@@ -515,14 +518,15 @@ export default function Kas() {
                     <span className={`text-sm font-black ${isPemasukan ? "text-green-600" : "text-red-600"}`}>
                       {isPemasukan ? "+" : "-"} Rp {tx.nominal.toLocaleString('id-ID')}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-3">
                       {isPemasukan && tx.residentId && (
                         <button
                           onClick={() => handlePrintReceipt(tx)}
-                          className="text-blue-600 hover:bg-blue-50 p-1 rounded transition-colors"
+                          className="text-blue-600 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors"
                           title="Cetak Bukti Bayar / Struk"
+                          aria-label="Cetak bukti bayar"
                         >
-                          <Printer className="w-4 h-4" />
+                          <Printer className="w-5 h-5" />
                         </button>
                       )}
                       <button
@@ -539,10 +543,11 @@ export default function Kas() {
                             deleteTransaction(tx.id);
                           }
                         }}
-                        className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                        className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
                         title="Hapus Transaksi"
+                        aria-label="Hapus transaksi"
                       >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
                       </button>
                     </div>
                   </div>
@@ -580,6 +585,7 @@ export default function Kas() {
             </div>
           )}
         </div>
+
 
         {/* Desktop View (Table) */}
         <div className="hidden md:block overflow-x-auto relative">
@@ -628,7 +634,7 @@ export default function Kas() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {processedTransactions.map((tx) => (
+              {processedTransactions.slice(0, visibleCount).map((tx) => (
                 <tr
                   key={tx.id}
                   className="hover:bg-gray-50/50 transition-colors"
@@ -731,6 +737,19 @@ export default function Kas() {
             </tbody>
           </table>
         </div>
+
+        {processedTransactions.length > visibleCount && (
+          <div className="p-4 border-t border-gray-100 text-center">
+            <button
+              type="button"
+              onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+              className="w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm text-brand-700 bg-brand-50 hover:bg-brand-100 transition-colors"
+            >
+              Tampilkan {Math.min(PAGE_SIZE, processedTransactions.length - visibleCount)} transaksi lagi
+              <span className="font-medium text-brand-500"> · {visibleCount} dari {processedTransactions.length}</span>
+            </button>
+          </div>
+        )}
       </div>
 
 

@@ -1,6 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Users, CreditCard, PieChart, Settings, X, Shield, LogOut, Landmark, Receipt, ArrowRightLeft, Minus, ChevronLeft, ChevronRight } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 
 const JepunIcon = ({ className }: { className?: string }) => (
@@ -128,16 +127,12 @@ export function Sidebar({ mobileOpen, setMobileOpen, collapsed, setCollapsed }: 
     return (
         <>
             {/* Mobile Backdrop */}
-            <AnimatePresence>
-                {mobileOpen && (
-                    <motion.div initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setMobileOpen(false)}
-                        className="fixed inset-0 bg-gray-900/50 z-40 lg:hidden backdrop-blur-sm"
-                    />
-                )}
-            </AnimatePresence>
+            {mobileOpen && (
+                <div
+                    onClick={() => setMobileOpen(false)}
+                    className="fixed inset-0 bg-gray-900/50 z-40 lg:hidden backdrop-blur-sm animate-in fade-in"
+                />
+            )}
 
             {/* Sidebar Panel */}
             <aside className={`print:hidden fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 transform transition-all duration-300 ease-in-out lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'w-20' : 'w-72'}`}>

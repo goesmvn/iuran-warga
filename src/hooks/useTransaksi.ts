@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import type { Transaction } from '../types';
 import { apiFetch } from '../utils/apiFetch';
+import { cachedData } from '../utils/offlineSync';
 
 export function useTransaksi() {
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>(() => cachedData<Transaction[]>('/api/transactions', [])); // tampil instan dari data terakhir di HP
 
     useEffect(() => {
         apiFetch('/api/transactions')
             .then(res => res.json())
-            .then(data => setTransactions(data))
+            .then(data => { if (Array.isArray(data)) setTransactions(data); })
             .catch(err => console.error("Failed to fetch transactions:", err));
     }, []);
 

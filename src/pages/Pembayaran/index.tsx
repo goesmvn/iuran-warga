@@ -86,7 +86,9 @@ export default function Pembayaran() {
   // Categories Selection State: { categoryId: nominal }
   const [selectedCategories, setSelectedCategories] = useState<Record<string, number>>({});
 
-  const incomes = categories.filter((c) => c.type === "Pemasukan" && c.showInPayment !== false);
+  // Kategori sistem (saldo awal, transfer, koreksi) bukan pembayaran warga dan bisa merusak laporan bila dipilih di sini
+  const SYSTEM_CATEGORY_IDS = ["cat-saldo-awal", "cat-transfer", "cat-koreksi-in", "cat-koreksi-out"];
+  const incomes = categories.filter((c) => c.type === "Pemasukan" && c.showInPayment !== false && !SYSTEM_CATEGORY_IDS.includes(c.id));
 
   const filteredWarga = useMemo(() => {
     if (!searchWarga.trim()) return warga.slice(0, 5);
@@ -194,6 +196,7 @@ export default function Pembayaran() {
     paid,
   });
   const grandTotal = plan.grandTotal;
+  const canSubmit = !!residentId && !!kasLocationId && plan.errors.length === 0;
   const summaryDetails = plan.items.map(item => ({ id: item.id, title: planItemTitle(item), subTotal: item.subTotal }));
   // Bulan yang akan ditagih untuk kategori bulanan (bulan lunas / tercakup tahunan sudah dibuang)
   const monthsToPayFor = (cid: string) => plan.items.find(i => i.id === cid)?.months ?? [];
@@ -319,7 +322,7 @@ export default function Pembayaran() {
     warga.find((w) => w.id === id)?.namaKepalaKeluarga || "-";
 
   return (
-    <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
+    <div className="animate-in fade-in duration-500 max-w-5xl mx-auto pb-24 lg:pb-0">
       <div className="mb-8 border-b border-gray-100 pb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center print:hidden">
         <div>
            <h2 className="text-2xl font-bold text-gray-900 font-display flex items-center gap-2">
@@ -424,14 +427,15 @@ export default function Pembayaran() {
 
                     {tunggakanStats && (
                       <div className={`p-4 rounded-xl border flex flex-col gap-3 animate-in slide-in-from-bottom-2 duration-300 ${tunggakanStats.isLunas ? 'bg-green-50 border-green-200' : 'bg-[#f43f5e]/10 border-orange-200'}`}>
-                         <div className="flex sm:items-center justify-between gap-3">
+                         <div className="flex flex-wrap items-start justify-between gap-2">
                              <div>
                                 <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${tunggakanStats.isLunas ? 'text-green-600' : 'text-orange-700'}`}>Status Keseluruhan Iuran Pokok</p>
                                 {tunggakanStats.isLunas ? (
                                    <h4 className="text-lg font-bold text-green-700 flex items-center gap-1.5"><Check className="w-5 h-5"/> Lunas 100%</h4>
                                 ) : (
-                                   <h4 className="text-lg font-bold text-gray-900">
-                                     Total Tunggakan: <span className="text-[#e11d48]">Rp {tunggakanStats.totalNominal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                   <h4 className="text-sm font-bold text-gray-700">
+                                     Total Tunggakan
+                                     <span className="block text-xl text-[#e11d48] whitespace-nowrap">Rp {tunggakanStats.totalNominal.toLocaleString('id-ID')}</span>
                                    </h4>
                                 )}
                              </div>
@@ -532,7 +536,7 @@ export default function Pembayaran() {
                     </div>
                 </div>
 
-                <button type="submit" disabled={!residentId || Object.keys(selectedCategories).length === 0 || !kasLocationId || periodicCategories.some(cid => monthsToPayFor(cid).length === 0)} className="w-full py-4 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] disabled:opacity-50 disabled:hover:bg-[#f43f5e] disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-[#f43f5e]/20 flex justify-center items-center gap-2 group">
+                <button type="submit" disabled={!canSubmit} className="w-full py-4 text-sm font-bold text-white bg-[#f43f5e] hover:bg-[#e11d48] disabled:opacity-50 disabled:hover:bg-[#f43f5e] disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-[#f43f5e]/20 flex justify-center items-center gap-2 group">
                    <CheckSquare className="w-5 h-5 group-disabled:opacity-50" />
                    Simpan & Cetak
                 </button>
@@ -540,6 +544,26 @@ export default function Pembayaran() {
                    Pastikan nominal donasi atau iuran sudah dititipkan/ditransfer sebelum direkam.
                 </p>
             </div>
+        </div>
+
+        {/* HP: total & tombol simpan selalu terlihat, tanpa scroll ke bawah form */}
+        <div
+          className="lg:hidden print:hidden fixed inset-x-0 z-20 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] px-4 py-3 flex items-center gap-3"
+          style={{ bottom: "calc(4rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+              Total{plan.transactions.length > 0 ? ` · ${plan.transactions.length} transaksi` : ""}
+            </p>
+            <p className="text-lg font-bold text-gray-900 leading-tight truncate">Rp {grandTotal.toLocaleString("id-ID")}</p>
+          </div>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="shrink-0 px-5 py-3 text-sm font-bold text-white bg-[#f43f5e] active:bg-[#e11d48] disabled:opacity-40 rounded-xl flex items-center gap-2"
+          >
+            <CheckSquare className="w-5 h-5" /> Simpan
+          </button>
         </div>
 
       </form>

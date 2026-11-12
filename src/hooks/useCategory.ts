@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import type { Category } from '../types';
 import { apiFetch } from '../utils/apiFetch';
+import { cachedData } from '../utils/offlineSync';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 export function useCategory() {
-    const [categories, setCategories] = useState<Category[]>([]);
+    const [categories, setCategories] = useState<Category[]>(() => cachedData<Category[]>('/api/categories', [])); // tampil instan dari data terakhir di HP
     const { alert: customAlert } = useConfirm();
 
     useEffect(() => {
         apiFetch('/api/categories')
             .then(res => res.json())
-            .then(data => setCategories(data))
+            .then(data => { if (Array.isArray(data)) setCategories(data); })
             .catch(err => console.error("Failed to fetch categories:", err));
     }, []);
 

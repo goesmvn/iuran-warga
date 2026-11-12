@@ -77,6 +77,13 @@ export const isQueueable = (url: string) => QUEUEABLE_PATTERN.test(url);
 export const readCache = (url: string) => readJSON<unknown>(CACHE_PREFIX + url, null);
 export const writeCache = (url: string, data: unknown) => writeJSON(CACHE_PREFIX + url, data);
 
+/** Data terakhir di perangkat untuk tampilan instan (stale-while-revalidate); fallback jika belum ada / bentuknya salah. */
+export function cachedData<T>(url: string, fallback: T): T {
+  const cached = readCache(url);
+  if (cached === null) return fallback;
+  return Array.isArray(fallback) === Array.isArray(cached) ? (cached as T) : fallback;
+}
+
 // ---------- status ----------
 export function getSyncStatus(): SyncStatus {
   return {

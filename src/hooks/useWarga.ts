@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import type { Resident } from '../types';
 import { DEFAULT_WARGA } from '../utils/constants';
 import { apiFetch } from '../utils/apiFetch';
+import { cachedData } from '../utils/offlineSync';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 export function useWarga() {
-    const [warga, setWarga] = useState<Resident[]>([]);
+    const [warga, setWarga] = useState<Resident[]>(() => cachedData<Resident[]>('/api/warga', [])); // tampil instan dari data terakhir di HP
     const { alert: customAlert } = useConfirm();
 
     const fetchWarga = async () => {
@@ -13,6 +14,7 @@ export function useWarga() {
             const res = await apiFetch('/api/warga');
             const data = await res.json();
             
+            if (!Array.isArray(data)) return; // respons error: pertahankan data yang ada
             if (data.length === 0 && DEFAULT_WARGA.length > 0 && !localStorage.getItem('warga_seeded')) {
                 localStorage.setItem('warga_seeded', 'true');
                 // Auto-seed database on first empty run

@@ -26,7 +26,6 @@
     "cors": "^2.8.6",
     "express": "^4.22.3",
     "express-rate-limit": "^7.1.5",
-    "framer-motion": "^12.34.3",
     "helmet": "^7.1.0",
     "html-to-image": "^1.11.13",
     "jsonwebtoken": "^9.0.2",
