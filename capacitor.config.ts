@@ -9,6 +9,10 @@ const config: CapacitorConfig = {
   appName: 'JepunKas',
   webDir: 'dist',
   server: testServer ? { cleartext: true } : undefined,
+  plugins: {
+    // Android 15+ edge-to-edge: suntik --safe-area-inset-* (dipakai index.css) agar konten tidak tertutup jam/status bar
+    SystemBars: { insetsHandling: 'css', initialViewportFitValueHint: 'cover' },
+  },
   android: {
     allowMixedContent: testServer,
   },

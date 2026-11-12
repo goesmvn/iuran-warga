@@ -15,7 +15,7 @@ export function BottomNav({ onOpenMenu }: { onOpenMenu: () => void }) {
         <nav
             aria-label="Navigasi utama"
             className="lg:hidden print:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-gray-200"
-            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            style={{ paddingBottom: "var(--sab)" }}
         >
             <ul className="grid grid-cols-6">
                 {items.map(({ icon: Icon, label, path }) => (

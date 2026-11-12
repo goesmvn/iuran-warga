@@ -66,7 +66,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
           }
         `}
       </style>
-      <div className="fixed inset-0 z-50 flex justify-center items-center p-4 print:p-0 print:block print:relative print:z-auto">
+      <div className="fixed inset-0 z-50 flex justify-center items-center p-4 pt-[calc(1rem+var(--sat))] pb-[calc(1rem+var(--sab))] print:p-0 print:block print:relative print:z-auto">
         {/* Backdrop */}
       <div
         className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm print:hidden"

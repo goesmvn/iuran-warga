@@ -26,7 +26,7 @@ export function Header({ setMobileOpen }: { setMobileOpen: (open: boolean) => vo
     const { user } = useAuth();
 
     return (
-        <header className="print:hidden sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200 h-16 flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+        <header className="print:hidden sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200 h-[calc(4rem+var(--sat))] pt-[var(--sat)] flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3 min-w-0">
                 <button
                     onClick={() => setMobileOpen(true)}

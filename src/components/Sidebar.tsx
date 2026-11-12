@@ -136,7 +136,7 @@ export function Sidebar({ mobileOpen, setMobileOpen, collapsed, setCollapsed }: 
             )}
 
             {/* Sidebar Panel */}
-            <aside className={`print:hidden fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 transform transition-all duration-300 ease-in-out lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'w-20' : 'w-72'}`}>
+            <aside className={`print:hidden fixed inset-y-0 left-0 z-50 flex flex-col pt-[var(--sat)] pb-[var(--sab)] bg-white border-r border-gray-200 transform transition-all duration-300 ease-in-out lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'w-20' : 'w-72'}`}>
 
                 <div className={`flex items-center h-16 border-b border-gray-100 px-4 shrink-0 relative ${collapsed ? 'justify-center' : 'justify-between'}`}>
                     <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>

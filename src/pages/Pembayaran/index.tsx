@@ -592,7 +592,7 @@ export default function Pembayaran() {
         {/* HP: total & tombol simpan selalu terlihat, tanpa scroll ke bawah form */}
         <div
           className="lg:hidden print:hidden fixed inset-x-0 z-20 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] px-4 py-3 flex items-center gap-3"
-          style={{ bottom: "calc(4rem + env(safe-area-inset-bottom))" }}
+          style={{ bottom: "calc(4rem + var(--sab))" }}
         >
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
@@ -627,7 +627,7 @@ export default function Pembayaran() {
 
       {/* Simple Warga Modal */}
       {isWargaModalOpen && (
-        <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
+        <div className="fixed inset-0 z-50 flex justify-center items-center p-4 pt-[calc(1rem+var(--sat))] pb-[calc(1rem+var(--sab))]">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsWargaModalOpen(false)}></div>
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">

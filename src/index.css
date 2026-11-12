@@ -106,3 +106,13 @@
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
 }
+
+/*
+ * Area aman layar (status bar jam/baterai di atas, garis navigasi gestur di bawah).
+ * Android 15+ menampilkan aplikasi edge-to-edge; Capacitor menyuntikkan --safe-area-inset-*,
+ * browser memakai env(). Tanpa ini header menempel ke jam HP.
+ */
+:root {
+  --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+}

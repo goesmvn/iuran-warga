@@ -41,7 +41,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f43f5e]/10 via-orange-50 to-[#e11d48]/5 flex items-center justify-center p-4">
+    <div className="min-h-screen pt-[calc(1rem+var(--sat))] pb-[calc(1rem+var(--sab))] bg-gradient-to-br from-[#f43f5e]/10 via-orange-50 to-[#e11d48]/5 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-endek-pattern opacity-5 mix-blend-multiply pointer-events-none"></div>
       
       <div className="bg-white/80 backdrop-blur-xl w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-white relative z-10 animate-in fade-in zoom-in-95 duration-500">
