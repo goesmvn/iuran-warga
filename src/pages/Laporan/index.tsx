@@ -1,5 +1,5 @@
 import { todayLocal } from "../../utils/date";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useTransaksi } from "../../hooks/useTransaksi";
 import { useWarga } from "../../hooks/useWarga";
 import { useCategory } from "../../hooks/useCategory";
@@ -31,7 +31,7 @@ import { LaporanWarga } from "../../components/LaporanWarga";
 const REPORT_TABS = [
   { id: "Tahunan", label: "Tahunan", desc: "Ringkasan setahun untuk warga & pembukuan", icon: BookOpen },
   { id: "Bulanan", label: "Bulanan", desc: "Uang masuk & keluar dalam satu bulan", icon: CalendarDays },
-  { id: "Pertanggal", label: "Rentang Tanggal", desc: "Transaksi pada tanggal yang dipilih", icon: CalendarRange },
+  { id: "Pertanggal", label: "Per Tanggal", desc: "Semua transaksi dalam rentang tanggal yang dipilih", icon: CalendarRange },
   { id: "ArusKas", label: "Arus Kas", desc: "Saldo kas dari bulan ke bulan", icon: TrendingUp },
   { id: "Rekapitulasi", label: "Rekap Iuran", desc: "Siapa sudah bayar bulan apa", icon: Grid3x3 },
   { id: "Tunggakan", label: "Tunggakan", desc: "Warga yang belum bayar", icon: AlertTriangle },
@@ -49,7 +49,6 @@ export default function Laporan() {
   // Orientasi kertas: default per tab (Rekap Warga 12 kolom bulan -> mendatar), bisa diganti pengguna
   const [orientationByTab, setOrientationByTab] = useState<Record<string, 'portrait' | 'landscape'>>({});
   const reportRef = useRef<HTMLDivElement>(null);
-  const tabListRef = useRef<HTMLDivElement>(null);
   const [sharingReport, setSharingReport] = useState(false);
 
   const namaKetua = settings['nama_ketua'] || '.........................';
@@ -59,10 +58,6 @@ export default function Laporan() {
   const alamatOrg = settings['alamat'] || '';
 
   const [activeTab, setActiveTab] = useState<"Bulanan" | "Tunggakan" | "Rekapitulasi" | "Tahunan" | "ArusKas" | "Pertanggal">("Tahunan");
-  // Di HP deretan kartu bisa digeser: pastikan kartu laporan yang aktif selalu terlihat
-  useEffect(() => {
-    tabListRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-  }, [activeTab]);
 
   // Filter States
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
@@ -565,7 +560,7 @@ export default function Laporan() {
   const orientation = orientationByTab[activeTab] ?? (activeTab === 'Rekapitulasi' ? 'landscape' : 'portrait');
   const tabTitles: Record<string, string> = {
     Tahunan: tahunanView === 'warga' ? 'Laporan untuk Warga' : 'Laporan Keuangan Tahunan',
-    Bulanan: 'Laporan Bulanan', Pertanggal: 'Laporan Rentang Tanggal', ArusKas: 'Laporan Arus Kas',
+    Bulanan: 'Laporan Bulanan', Pertanggal: 'Laporan Per Tanggal', ArusKas: 'Laporan Arus Kas',
     Rekapitulasi: 'Rekap Iuran Warga', Tunggakan: 'Daftar Tunggakan',
   };
 
@@ -604,10 +599,9 @@ export default function Laporan() {
 
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto print:max-w-none print:w-full print:m-0">
-      {/* Pilihan jenis laporan: kartu dengan penjelasan singkat (HP: geser ke samping) */}
+      {/* Pilihan jenis laporan: tombol seragam (HP 2 kolom, tablet/laptop 3, layar lebar 6), penjelasan laporan aktif di bawahnya */}
       <div className="print:hidden mb-5">
-        <p className="text-sm text-gray-500 mb-3">Pilih laporan yang ingin dilihat:</p>
-        <div ref={tabListRef} className="-mx-4 px-4 sm:mx-0 sm:px-0 flex sm:grid sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5 overflow-x-auto sm:overflow-visible snap-x pb-1 no-scrollbar" role="tablist">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2" role="tablist" aria-label="Jenis laporan">
           {REPORT_TABS.map(tab => {
             const active = activeTab === tab.id;
             const Icon = tab.icon;
@@ -616,25 +610,27 @@ export default function Laporan() {
                 key={tab.id}
                 role="tab"
                 aria-selected={active}
+                title={tab.desc}
                 onClick={() => {
                   setActiveTab(tab.id);
                   setSearchQuery("");
                 }}
-                className={`snap-start shrink-0 w-32 sm:w-auto text-left rounded-2xl border-2 p-2.5 sm:p-3 transition-all ${
+                className={`h-12 flex items-center gap-2.5 px-3 rounded-xl border text-left text-sm font-semibold transition-colors ${
                   active
-                    ? "border-brand-500 bg-brand-50 shadow-sm"
-                    : "border-gray-100 bg-white hover:border-brand-200"
+                    ? "border-brand-500 bg-brand-600 text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-brand-300 hover:bg-brand-50"
                 }`}
               >
-                <span className={`inline-flex p-1.5 sm:p-2 rounded-xl mb-1.5 sm:mb-2 ${active ? "bg-brand-500 text-white" : "bg-gray-100 text-gray-600"}`}>
-                  <Icon className="w-4 h-4" />
-                </span>
-                <span className={`block text-sm font-bold ${active ? "text-brand-800" : "text-gray-900"}`}>{tab.label}</span>
-                <span className="block text-[11px] sm:text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{tab.desc}</span>
+                <Icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-brand-500"}`} />
+                <span className="truncate">{tab.label}</span>
               </button>
             );
           })}
         </div>
+        <p className="mt-2.5 text-sm text-gray-600">
+          <span className="font-semibold text-gray-900">{REPORT_TABS.find(t => t.id === activeTab)?.label}:</span>{" "}
+          {REPORT_TABS.find(t => t.id === activeTab)?.desc}
+        </p>
       </div>
 
       {/* Filter Bar */}
